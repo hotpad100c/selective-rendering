@@ -7,10 +7,7 @@ import fi.dy.masa.malilib.gui.interfaces.IKeybindConfigGui;
 import fi.dy.masa.malilib.gui.widgets.WidgetConfigOption;
 import fi.dy.masa.malilib.gui.widgets.WidgetListConfigOptionsBase;
 
-/**
- * 预设区的标题行，顺便承载"新建"按钮（因为 {@code GuiConfigsBase} 的
- * 普通标题行是不能放按钮的，这里用一个假的 config 行来顶替）。
- */
+/** 显示预设标题和新建按钮。 */
 public final class WidgetPresetHeader extends WidgetConfigOption {
 	public WidgetPresetHeader(int x, int y, int width, int height, int labelWidth, int configWidth,
 			ConfigOptionWrapper wrapper, int listIndex, IKeybindConfigGui host,

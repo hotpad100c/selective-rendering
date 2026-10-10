@@ -4,15 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 
-/**
- * 屏幕下方居中的一条临时提示（"+ minecraft:stone" / "- #minecraft:planks"），
- * 2 秒后淡出。用于反馈"刚加了/删了一条规则或区域"。
- *
- * <p>它是<b>全静态</b>的单例样式：同一时刻只有一条消息，新的会盖掉旧的。
- * 只在客户端（渲染）线程读写，因此没有做同步。
- *
- * <p>渲染入口在 {@code GuiMixin}（注入 {@code Hud.extractRenderState}）。
- */
+/** 显示规则或选区修改的短暂提示，新消息替换旧消息。 */
 public final class BlockListMessage {
 	private static final long LIFETIME_MS = 2000L;
 	private static final long FADE_MS = 500L;
@@ -43,13 +35,6 @@ public final class BlockListMessage {
 		shownAt = now();
 	}
 
-	/**
-	 * 画出当前消息（如果有且未过期）。
-	 *
-	 * <p>{@code shownAt} 初值为 0，此时 {@code age} 会是一个巨大的正数，
-	 * 直接被 {@code age >= LIFETIME_MS} 判掉（早年的实现用 {@code Long.MIN_VALUE}，
-	 * 靠 long 溢出成负数来判，属于"碰巧对"的写法）。
-	 */
 	public static void render(GuiGraphicsExtractor graphics, Font font) {
 		long age = now() - shownAt;
 		if (rule.isEmpty() || age < 0 || age >= LIFETIME_MS) {

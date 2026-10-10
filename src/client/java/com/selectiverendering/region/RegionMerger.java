@@ -11,24 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
-/**
- * 把一堆散落的方块坐标"贪心地"合并成尽量少的长方体 {@link Region}。
- *
- * <p>只有 {@link BlockChangeRecorder} 在用：记录器收集到的变化坐标可能有几万个，
- * 如果一格一格地加进选区列表，判定开销会爆炸，所以先压成若干个盒子。
- *
- * <h2>算法（贪心，不保证最优）</h2>
- * <ol>
- *   <li>按 Y 分层，每层存该层所有 (x,z) 组成的集合（用 long 打包成一个 key）；</li>
- *   <li>在某一层任取一个还没被吃掉的格子，向右扩成一条最长的行，再向前扩成最大的矩形；</li>
- *   <li>把这个矩形从当前层移除，然后试着<b>向上</b>长高：只要上一层的同一个矩形也完整存在，
- *       就把它也吃掉并继续往上一层；</li>
- *   <li>得到一个 3D 盒子，重复直到该层空了。</li>
- * </ol>
- *
- * <p>因为是贪心，结果可能远多于理论最小值（比如棋盘状分布会退化成很多小盒子），
- * 但对"记录一次建筑/挖矿过程"这种实际数据够用。
- */
+/** 将离散方块坐标贪心合并为互不重叠的长方体选区。 */
 public final class RegionMerger {
 	private RegionMerger() {
 	}
@@ -111,7 +94,6 @@ public final class RegionMerger {
 		}
 	}
 
-	/** 把 (x, z) 打包进一个 long：高 32 位是 x，低 32 位是 z（z 为负数时按补码存，{@link #unpackZ} 能还回来）。 */
 	private static long pack(int x, int z) {
 		return ((long) x << 32) | (z & 0xFFFFFFFFL);
 	}

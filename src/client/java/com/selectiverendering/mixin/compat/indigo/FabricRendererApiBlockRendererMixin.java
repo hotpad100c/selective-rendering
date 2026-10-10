@@ -20,21 +20,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * <b>FRAPI / Indigo（Fabric Renderer API）兼容补丁</b>：对应原版的 {@code ModelBlockRendererMixin}。
- *
- * <p>Indigo 是 Fabric API 提供的另一套方块渲染实现（{@code AltModelBlockRendererImpl}），
- * 一些 Mod 会强制走它。它内部类和 Mojang 的 {@code ModelBlockRenderer} 完全不同，
- * 所以要单独打一套：{@code tesselateBlock} 前后保存/清理上下文，
- * {@code transform} 里改 alpha 和层，{@code shouldCullFace} 里修面剔除。
- *
- * <p>这里用<b>实例字段</b>而不是 ThreadLocal 存上下文：
- * Indigo 的渲染器是按线程持有的，所以可行。
- *
- * <p>本文件与另外两个 {@code FabricRendererApi*} 都用
- * {@code require = 0} + {@code remap = false} + 字符串 {@code targets}：
- * 三个条件缺一不可，这样在没装 Fabric API 时才不会启动崩溃。
- */
+/** 为 Indigo 方块渲染应用透明度、半透明材质和面剔除修正。 */
 @Mixin(targets = "net.fabricmc.fabric.impl.client.indigo.renderer.render.AltModelBlockRendererImpl", remap = false)
 public class FabricRendererApiBlockRendererMixin {
 	@Unique
@@ -115,8 +101,6 @@ public class FabricRendererApiBlockRendererMixin {
 			return;
 		}
 
-		// "自己"的 alpha 直接读 tesselateBlock 入口算好的那份，不要再判一遍：
-		// shouldCullFace 每个面都要问一次，而同一个方块的 6 个面答案完全一样。
 		boolean hidden = selectiveRendering$alpha >= 0;
 
 		BlockPos neighbourPos = BlockPosScratch.offset(pos, direction);

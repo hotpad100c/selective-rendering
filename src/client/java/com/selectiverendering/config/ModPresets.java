@@ -5,18 +5,11 @@ import java.util.List;
 
 import com.selectiverendering.SelectiveRenderingManager;
 
-/**
- * 预设的增删改：把"当前所有设置"拍一张快照存起来，之后一键恢复。
- *
- * <p>{@link #overwrite} 的实现比较特殊：它<b>原地修改</b>列表里那个 {@link Preset} 对象
- * （因为配置界面持有的是同一个引用），改完只调 {@code savePresets()} 落盘。
- * 依赖了 {@code Preset} 的可变性，改动前注意。
- */
+/** 创建、覆盖、重命名和删除设置预设。 */
 public final class ModPresets {
 	private ModPresets() {
 	}
 
-	/** 用当前设置新建一个预设，名字自动取 "预设 1 / 预设 2 …"（跳过已占用的）。 */
 	public static void create() {
 		List<Preset> presets = new ArrayList<>(SelectiveRenderingManager.presets());
 		presets.add(capture(nextName(presets)));

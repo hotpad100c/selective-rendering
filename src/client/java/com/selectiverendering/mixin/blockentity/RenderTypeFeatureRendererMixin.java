@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /*import net.minecraft.client.Minecraft;
 *///?}
 
-// 26.2+ 取 VertexConsumer 的统一入口；26.1.2 没有这个类，这里是空壳
+// 26.2+ 的顶点缓冲入口。
 //? if >=26.2 {
 @Mixin(RenderTypeFeatureRenderer.class)
 public class RenderTypeFeatureRendererMixin {

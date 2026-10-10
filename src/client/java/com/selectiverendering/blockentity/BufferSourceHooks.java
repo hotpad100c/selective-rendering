@@ -5,9 +5,7 @@ import com.selectiverendering.render.MovingBlockRenderContext;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 
-/**
- * 将间谍VertexCOnsumer写入移动中的活塞方块实体渲染器。
- */
+/** 为移动方块的渲染缓冲应用当前透明度。 */
 public final class BufferSourceHooks {
 	private BufferSourceHooks() {
 	}

@@ -12,17 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * 一份<b>不可变</b>的渲染配置。
- *
- * <p>把原来散落的 mode / transparency / invert / 名单 / 选区 / ... 合成一条记录，
- * 由 {@link SelectiveRenderingManager#publish()} 一次生成、一次发布。渲染线程拿到它之后，
- * 整个判定过程里不再读任何别的共享可变状态。
- *
- * <p>{@code alpha} 与 {@code union} 是构造时算好的派生量：
- * 前者省掉每次判定的 {@code Math.round}，后者是"所有选区的外接盒"，
- * 用来在逐坐标判定之前做一次快速否定。
- */
+/** 不可变的渲染配置快照，供渲染侧统一读取。 */
 public record RenderConfig(
 	Mode mode,
 	int transparency,

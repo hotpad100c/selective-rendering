@@ -3,9 +3,7 @@ package com.selectiverendering.blockentity;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.jspecify.annotations.NonNull;
 
-/**
- * 间谍VertexConsumer。它会覆盖所有顶点的透明度信息。
- */
+/** 包装顶点消费者，覆盖顶点透明度。 */
 public class AlphaVertexConsumer implements VertexConsumer {
 	private final VertexConsumer base;
 	private final int alpha;

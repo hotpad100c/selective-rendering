@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.Minecraft;
 //?}
 
-// 26.1.2 取 VertexConsumer 的入口；26.2+ 由 RenderTypeFeatureRendererMixin 接手，这里是空壳
+// 26.1.2 的顶点缓冲入口。
 //? if <26.2 {
 /*@Mixin(MultiBufferSource.BufferSource.class)
 public class BufferSourceMixin {

@@ -3,6 +3,7 @@ package com.selectiverendering.lighting;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.region.Region;
 import com.selectiverendering.render.Alpha;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -11,114 +12,81 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.LightChunk;
 import net.minecraft.world.level.lighting.LevelLightEngine;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
-/**
- * 光照抑制：被隐藏的方块在客户端光照里一律当成空气，并在"隐藏集合变了"或"区块带着服务端光照到了"
- * 的时候，把受影响的光照重算回来。
- *
- * <h2>三块职责</h2>
- * <ol>
- *   <li><b>伪装</b> {@link #airIfHidden}：光照引擎 / AO 的 mixin 统一入口。</li>
- *   <li><b>标记</b> {@link #relight()} / {@link #markChunk}：把"需要重算的区块"放进待办集合。
- *       前者由选区 / 模式变化触发（主线程），后者由 {@code AreaLightPacketMixin} 在收到服务端光照时触发。</li>
- *   <li><b>执行</b> {@link #flush}：由 {@code AreaLightFlushMixin} 挂在
- *       {@code LevelLightEngine.runLightUpdates} 的 RETURN，每帧按预算消化待办。</li>
- * </ol>
- *
- * <h2>为什么执行点选在 runLightUpdates 之后</h2>
- * <p>服务端发来的光照数据（{@code applyLightData}）不是立即写入的，而是 {@code queueSectionData}
- * 排队，要等下一次 {@code runLightUpdates} 才真正落地，并且会<b>覆盖</b>客户端已经算好的结果——
- * 而服务端是按方块真实存在算的。所以必须等它落地之后再 {@code checkBlock}，否则白算。
- * {@code checkBlock} 本身也只是入队，由随后的 {@code runLightUpdates} 传播，不会在本次调用里重入。
- *
- * <h2>为什么只检查选区附近</h2>
- * <p>{@code checkBlock(pos)} 的语义是"这个位置的方块变了，请重新评估"，光的扩散 / 回收由引擎自己沿邻居传播。
- * 所以只需要对<b>真正发生了变化的那些格子</b>（选区本身，外加水平外扩 1 格）下手，
- * 不需要像早期实现那样把选区外扩 15 格整块扫一遍。
- */
+/** 在客户端光照和 AO 计算中将隐藏方块视为空气，并调度受影响区块的光照重算。 */
 public final class LightSuppression {
-	/** 每次 {@link #flush} 最多发出多少个 {@code checkBlock}，避免单帧卡顿。 */
 	private static final int BUDGET_PER_FLUSH = 2000;
 
-	/** 选区水平方向外扩几格一起检查：选区边缘的邻居也会受到影响。 */
 	private static final int MARGIN = 1;
+
+	/** 全区块扫描的每帧时间预算（纳秒）及检查数量上限。 */
+	private static final long GLOBAL_TIME_BUDGET = 2_000_000L;
+	private static final int GLOBAL_CHECK_LIMIT = 6000;
+
+	private static final Predicate<BlockState> LIGHT_RELEVANT = state -> state.getLightDampening() > 0 || state.getLightEmission() > 0;
 
 	private static final long NO_CHUNK = Long.MIN_VALUE;
 
+	private static final int SOURCE_CACHE_LIMIT = 300_000;
+
+	/** 列 (x, z) -> (真实源头高度, 隐藏方块当空气后的源头高度)，各占 32 位。 */
+	private static final Long2LongOpenHashMap SOURCE_CACHE = new Long2LongOpenHashMap();
+
 	private static final Object LOCK = new Object();
 
-	/**
-	 * 待重算的区块（{@link ChunkPos#pack}），保持插入顺序。
-	 * 集合语义天然去重：连续切模式 / 多个数据包只会让同一区块排一次队。
-	 */
+	/** 按插入顺序保存待重算区块并去重。 */
 	private static final LongLinkedOpenHashSet PENDING = new LongLinkedOpenHashSet();
 
-	/**
-	 * "曾经被隐藏过、但现在已不在选区列表里"的区域。
-	 *
-	 * <p>删掉 / 裁掉一个选区之后，那块地方的光照仍然带着我们污染过的数据
-	 * （当时那些方块在光照引擎里被当成空气），必须再算一遍才能恢复。
-	 * 但它们已经不在选区快照里，所以要单独记一份，每次重算时一起带上。
-	 *
-	 * <p>只增不减。元素数等于"历史上删 / 裁过的选区总数"，每个只是一个 record，可以忽略。
-	 */
+	/** 已删除或裁剪、仍需还原光照的历史选区。 */
 	private static final List<Region> RETIRED_REGIONS = new ArrayList<>();
 
-	/** 正在处理的区块和已处理到的列号（0..255）；一个区块跨多帧处理时用来续跑。 */
+	/** 全局扫描队列：ALL 还原所有相关方块，FILTERED 仅检查当前隐藏方块。 */
+	private static final LongLinkedOpenHashSet GLOBAL_ALL = new LongLinkedOpenHashSet();
+	private static final LongLinkedOpenHashSet GLOBAL_FILTERED = new LongLinkedOpenHashSet();
+
+	private static long globalChunk = NO_CHUNK;
+	private static boolean globalAll;
+	private static int globalIndex;
+
+	/** 上次重算是否使用全局模式，用于切走后还原光照。 */
+	private static boolean lastGlobal;
+
+	/** 跨帧扫描的区块及列游标。 */
 	private static long cursorChunk = NO_CHUNK;
 	private static int cursorColumn;
 
 	private LightSuppression() {
 	}
 
-	// ============================== 伪装 ==============================
 
-	/**
-	 * 光照 / 平滑光照补丁的统一入口：被隐藏的方块在计算里一律当成空气。
-	 *
-	 * <p>原版、Sodium、Indigo 各有自己的一套光照数据结构，所以几个 mixin
-	 * 都得各打一遍补丁。判定收在这里之后，每个注入点只剩一行。
-	 *
-	 * @param state 该位置真实的方块状态（由调用方先取好）
-	 */
+	/** 返回光照和 AO 计算使用的状态，将隐藏方块视为空气。 */
 	public static BlockState airIfHidden(BlockState state, BlockPos pos) {
-		// 模式关闭 = 本 Mod 对整个管线零干预。
-		// 下面那个 fullBright 分支不看分方块、一律"当空气"，如果这里不先短路，
-		// 夜视（默认开启）+ 模式关闭时，光照引擎和 AO 会被全局改成"当空气"——
-		// 结果就是全世界的 AO 消失、客户端光照数据按到处通透来算。
 		if (SelectiveRenderingManager.getMode() == SelectiveRenderingManager.Mode.OFF) {
 			return state;
 		}
 
 		if (SelectiveRenderingManager.isFullBright()) {
-			// 夜视：一律当空气，不再逐方块判定。
-			//
-			// 对光照引擎来说：画面本来就全亮，"让光穿过被淡化的方块"毫无意义，
-			// 而这是全 Mod 最热的一条路径（光照线程上百万次量级），直接抹掉。
-			//
-			// 对平滑光照(AO)来说：等于"没有任何方块产生遮蔽"。这样被淡化的方块
-			// 周围不会留下遮挡暗角（否则会看到一圈像被隐形东西挡住的暗边），
-			// 代价是画面失去 AO 的立体感——夜视本来就是平的，可以接受。
-			// 这里参考了 meteor 的 Xray，它在 Xray 激活时直接把 AO 拉满。
+			// 全亮时同时移除 AO 遮挡。
 			return Blocks.AIR.defaultBlockState();
 		}
 
 		return Alpha.alphaNow(state, pos, false) >= 0 ? Blocks.AIR.defaultBlockState() : state;
 	}
 
-	// ============================== 标记 ==============================
 
-	/**
-	 * 隐藏集合变了（切模式、增删 / 裁剪选区……），把所有相关区块排进待办。
-	 *
-	 * <p>目标 = 当前所有选区 + {@link #RETIRED_REGIONS}，两者都是"光照可能被我们污染过"的地方。
-	 * 夜视开启时不做：那时本来就不依赖光照。
-	 */
+	/** 将当前及历史选区涉及的区块加入光照重算队列。 */
 	public static void relight() {
+		synchronized (SOURCE_CACHE) {
+			SOURCE_CACHE.clear();
+		}
+
 		if (SelectiveRenderingManager.isFullBright()) {
 			return;
 		}
@@ -127,6 +95,15 @@ public final class LightSuppression {
 		if (level == null) {
 			return;
 		}
+
+		SelectiveRenderingManager.Mode mode = SelectiveRenderingManager.getMode();
+		boolean global = isGlobal(mode);
+
+		if (global || lastGlobal) {
+			enqueueAround(level);
+		}
+
+		lastGlobal = global;
 
 		List<Region> targets = targets();
 		if (targets.isEmpty()) {
@@ -149,7 +126,7 @@ public final class LightSuppression {
 		}
 	}
 
-	/** 把"已经不在选区列表里、但光照仍需还原"的区域记下来，供下一次 {@link #relight()} 使用。 */
+	/** 记录已移除、仍需还原光照的选区。 */
 	public static void retire(List<Region> regions) {
 		synchronized (LOCK) {
 			for (Region region : regions) {
@@ -160,20 +137,118 @@ public final class LightSuppression {
 		}
 	}
 
-	/**
-	 * 一个区块带着服务端的光照到了（或刚启用光照），标记它在光照落地后需要重算。
-	 *
-	 * <p>服务端按"方块真实存在"算光，这份数据会覆盖客户端的伪装，所以必须补算。
-	 * 只有区域类模式才会出现这个问题；名单类模式隐藏的方块遍布整个世界，不在本类的处理范围。
-	 */
+	/** 标记收到服务端光照的区块，待数据落地后重算。 */
 	public static void markChunk(int chunkX, int chunkZ) {
-		if (!SelectiveRenderingManager.getMode().usesRegion() || SelectiveRenderingManager.isFullBright()) {
+		SelectiveRenderingManager.Mode mode = SelectiveRenderingManager.getMode();
+		if (mode == SelectiveRenderingManager.Mode.OFF || SelectiveRenderingManager.isFullBright()) {
 			return;
 		}
 
 		synchronized (LOCK) {
-			enqueue(chunkX, chunkZ);
+			if (isGlobal(mode)) {
+				long packed = ChunkPos.pack(chunkX, chunkZ);
+				if (!GLOBAL_ALL.contains(packed)) {
+					GLOBAL_FILTERED.add(packed);
+				}
+			} else if (mode.usesRegion()) {
+				enqueue(chunkX, chunkZ);
+			}
 		}
+	}
+
+	private static boolean isGlobal(SelectiveRenderingManager.Mode mode) {
+		return mode == SelectiveRenderingManager.Mode.BLACKLIST || mode == SelectiveRenderingManager.Mode.WHITELIST;
+	}
+
+	private static void enqueueAround(ClientLevel level) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (minecraft.player == null) {
+			return;
+		}
+
+		int radius = minecraft.options.renderDistance().get();
+		int centerX = minecraft.player.chunkPosition().x();
+		int centerZ = minecraft.player.chunkPosition().z();
+
+		List<long[]> ordered = new ArrayList<>();
+		for (int dx = -radius; dx <= radius; dx++) {
+			for (int dz = -radius; dz <= radius; dz++) {
+				ordered.add(new long[] {(long) dx * dx + (long) dz * dz, ChunkPos.pack(centerX + dx, centerZ + dz)});
+			}
+		}
+		ordered.sort((a, b) -> Long.compare(a[0], b[0]));
+
+		synchronized (LOCK) {
+			for (long[] entry : ordered) {
+				GLOBAL_ALL.add(entry[1]);
+				GLOBAL_FILTERED.remove(entry[1]);
+			}
+
+			if (globalChunk != NO_CHUNK && !globalAll) {
+				globalChunk = NO_CHUNK;
+			}
+		}
+	}
+
+	/**
+	 * 天光源头高度：从真实源头往下穿过所有"当空气后不挡光"的方块，停在第一个仍然挡光的方块上方。
+	 * 只对客户端引擎生效（调用方已核对），并且按列缓存；缓存在 {@link #relight()} 和该列
+	 * {@code checkBlock} 时失效。
+	 *
+	 * @param real 原版按真实方块算出的结果
+	 */
+	public static int lowestSourceY(LightChunk chunk, int x, int z, int real) {
+		SelectiveRenderingManager.Mode mode = SelectiveRenderingManager.getMode();
+		if (real == Integer.MIN_VALUE || mode == SelectiveRenderingManager.Mode.OFF
+			|| SelectiveRenderingManager.isFullBright() || hidesOutside(mode)) {
+			return real;
+		}
+
+		long key = BlockPos.asLong(x, 0, z);
+
+		synchronized (SOURCE_CACHE) {
+			long cached = SOURCE_CACHE.getOrDefault(key, Long.MIN_VALUE);
+			if (cached != Long.MIN_VALUE && (int) (cached >> 32) == real) {
+				return (int) cached;
+			}
+		}
+
+		int result = Integer.MIN_VALUE;
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(x, 0, z);
+
+		for (int y = real - 1; y >= chunk.getMinY(); y--) {
+			pos.setY(y);
+			BlockState state = airIfHidden(chunk.getBlockState(pos), pos);
+
+			if (state.getLightDampening() > 0 || state.useShapeForLightOcclusion()) {
+				result = y + 1;
+				break;
+			}
+		}
+
+		synchronized (SOURCE_CACHE) {
+			if (SOURCE_CACHE.size() > SOURCE_CACHE_LIMIT) {
+				SOURCE_CACHE.clear();
+			}
+
+			SOURCE_CACHE.put(key, ((long) real << 32) | (result & 0xFFFFFFFFL));
+		}
+
+		return result;
+	}
+
+	public static void invalidateColumn(int x, int z) {
+		synchronized (SOURCE_CACHE) {
+			if (!SOURCE_CACHE.isEmpty()) {
+				SOURCE_CACHE.remove(BlockPos.asLong(x, 0, z));
+			}
+		}
+	}
+
+	private static boolean hidesOutside(SelectiveRenderingManager.Mode mode) {
+		return mode == SelectiveRenderingManager.Mode.REGION_OUTSIDE
+			|| mode == SelectiveRenderingManager.Mode.REGION_OUTSIDE_LISTED
+			|| mode == SelectiveRenderingManager.Mode.REGION_OUTSIDE_UNLISTED;
 	}
 
 	private static void enqueue(int chunkX, int chunkZ) {
@@ -181,22 +256,16 @@ public final class LightSuppression {
 		PENDING.add(packed);
 
 		if (packed == cursorChunk) {
-			// 正在处理的区块又被标记了：之前处理过的列可能已经过期，从头再来
+			// 区块再次变脏时，从首列重新扫描。
 			cursorColumn = 0;
 		}
 	}
 
-	// ============================== 执行 ==============================
 
-	/**
-	 * 由 {@code AreaLightFlushMixin} 在每次 {@code runLightUpdates} 返回后调用：
-	 * 按预算消化待办区块。
-	 *
-	 * <p>{@code LevelLightEngine} 服务端也有，所以先确认这是客户端世界的那台引擎。
-	 */
+	/** 在客户端光照更新后，按预算处理待重算区块。 */
 	public static void flush(LevelLightEngine engine) {
 		synchronized (LOCK) {
-			if (PENDING.isEmpty()) {
+			if (PENDING.isEmpty() && GLOBAL_ALL.isEmpty() && GLOBAL_FILTERED.isEmpty()) {
 				return;
 			}
 		}
@@ -205,7 +274,10 @@ public final class LightSuppression {
 		if (level == null) {
 			synchronized (LOCK) {
 				PENDING.clear();
+				GLOBAL_ALL.clear();
+				GLOBAL_FILTERED.clear();
 				cursorChunk = NO_CHUNK;
+				globalChunk = NO_CHUNK;
 			}
 			return;
 		}
@@ -213,6 +285,8 @@ public final class LightSuppression {
 		if (engine != level.getLightEngine()) {
 			return;
 		}
+
+		flushGlobal(level);
 
 		List<Region> targets = targets();
 
@@ -239,20 +313,88 @@ public final class LightSuppression {
 		}
 	}
 
+	private static void flushGlobal(ClientLevel level) {
+		long deadline = System.nanoTime() + GLOBAL_TIME_BUDGET;
+		int checks = 0;
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+
+		synchronized (LOCK) {
+			while (checks < GLOBAL_CHECK_LIMIT && System.nanoTime() < deadline) {
+				if (globalChunk == NO_CHUNK) {
+					if (!GLOBAL_ALL.isEmpty()) {
+						globalChunk = GLOBAL_ALL.firstLong();
+						globalAll = true;
+					} else if (!GLOBAL_FILTERED.isEmpty()) {
+						globalChunk = GLOBAL_FILTERED.firstLong();
+						globalAll = false;
+					} else {
+						return;
+					}
+
+					globalIndex = 0;
+				}
+
+				LevelChunk chunk = level.getChunkSource().getChunk(ChunkPos.getX(globalChunk), ChunkPos.getZ(globalChunk), false);
+				if (chunk == null) {
+					finishGlobal();
+					continue;
+				}
+
+				LevelChunkSection[] sections = chunk.getSections();
+				int total = sections.length * 4096;
+				int baseX = chunk.getPos().getMinBlockX();
+				int baseZ = chunk.getPos().getMinBlockZ();
+
+				while (globalIndex < total) {
+					int sectionIndex = globalIndex >> 12;
+					LevelChunkSection section = sections[sectionIndex];
+
+					if (section.hasOnlyAir() || !section.maybeHas(LIGHT_RELEVANT)) {
+						globalIndex = (sectionIndex + 1) << 12;
+						continue;
+					}
+
+					int local = globalIndex & 4095;
+					globalIndex++;
+
+					int localX = local & 15;
+					int localZ = (local >> 4) & 15;
+					int localY = local >> 8;
+
+					BlockState state = section.getBlockState(localX, localY, localZ);
+					if (LIGHT_RELEVANT.test(state)) {
+						int y = (level.getSectionYFromSectionIndex(sectionIndex) << 4) + localY;
+						pos.set(baseX + localX, y, baseZ + localZ);
+
+						if (globalAll || airIfHidden(state, pos) != state) {
+							level.getLightEngine().checkBlock(pos);
+							checks++;
+						}
+					}
+
+					if ((globalIndex & 511) == 0 && (checks >= GLOBAL_CHECK_LIMIT || System.nanoTime() >= deadline)) {
+						return;
+					}
+				}
+
+				finishGlobal();
+			}
+		}
+	}
+
+	private static void finishGlobal() {
+		(globalAll ? GLOBAL_ALL : GLOBAL_FILTERED).remove(globalChunk);
+		globalChunk = NO_CHUNK;
+		globalIndex = 0;
+	}
+
 	private static void finishChunk() {
 		PENDING.remove(cursorChunk);
 		cursorChunk = NO_CHUNK;
 		cursorColumn = 0;
 	}
 
-	/**
-	 * 对一个区块里与选区相交的列发出 {@code checkBlock}，直到预算用完或列扫完。
-	 *
-	 * <p>每一列取"所有覆盖它的选区"的并集高度：上沿是选区顶外加 1 格，
-	 * 下沿是选区底外加 1 格，并且一直延伸到该列的天光源头（天光被改动后，下面的亮度也要跟着重估）。
-	 *
-	 * @return 剩余预算
-	 */
+	/** 扫描区块中与选区相交的列并提交光照检查，返回剩余预算。 */
 	private static int scanChunk(ClientLevel level, LevelChunk chunk, List<Region> targets, int budget) {
 		int baseX = chunk.getPos().getMinBlockX();
 		int baseZ = chunk.getPos().getMinBlockZ();

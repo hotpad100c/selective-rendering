@@ -35,10 +35,7 @@ import fi.dy.masa.malilib.util.GuiUtils;
 import fi.dy.masa.malilib.util.StringUtils;
 import fi.dy.masa.malilib.util.data.ModInfo;
 
-/**
- * MaLiLib 配置项。值的权威来源是 {@link SelectiveRenderingManager}，这里的配置项只是它的视图：
- * 用户改控件 → 回调写入 manager；{@link #syncFromManager} 把 manager 的值回灌到控件。
- */
+/** 连接 MaLiLib 配置控件与运行时设置。 */
 public final class ModConfigs {
 	private static final String KEY = SelectiveRendering.MOD_ID + ".config";
 	private static final String MOD_NAME = "Selective Rendering";
@@ -79,7 +76,7 @@ public final class ModConfigs {
 	);
 
 	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, BLOCKS_KEY, RECORD_KEY);
-	// 只落盘键位；布尔值由 manager 经 ModConfig.passThrough 保存
+	// 仅保存键位；开关值由 manager 保存。
 	private static final List<IHotkey> TOGGLE_LIST = List.of(PASS_THROUGH);
 
 	private static boolean syncing = false;
@@ -102,7 +99,7 @@ public final class ModConfigs {
 
 		TickHandler.getInstance().registerClientTickHandler(BlockChangeRecorder::onTick);
 
-		// readHotkeys 会让 ConfigBooleanHotkeyed 触发值变化回调，此时控件里还是默认值，不能写回 manager
+		// 加载键位会触发值回调，期间禁止默认值写回 manager。
 		syncing = true;
 		try {
 			readHotkeys();
@@ -198,7 +195,7 @@ public final class ModConfigs {
 		}
 	}
 
-	/** 拖动条吸附到 {@link SelectiveRenderingManager#TRANSPARENCY_STEP} 的倍数，输入框不吸附。 */
+	/** 透明度滑块按设定步长吸附，输入框允许任意整数。 */
 	public static final class TransparencyConfig extends ConfigInteger {
 		public TransparencyConfig(String name) {
 			super(name, SelectiveRenderingManager.DEFAULT_TRANSPARENCY, 0, SelectiveRenderingManager.MAX_TRANSPARENCY, true);

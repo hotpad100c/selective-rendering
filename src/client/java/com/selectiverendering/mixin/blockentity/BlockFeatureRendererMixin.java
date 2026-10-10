@@ -19,27 +19,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 
-/**
- * <b>活塞推动中方块（moving_piston）的淡化</b>。
- *
- * <p>这条路径和区块网格完全无关：移动方块每帧由 {@code MovingBlockFeatureRenderer}
- * 单独渲染，它内部又复用了 {@code ModelBlockRenderer.tesselateBlock}。
- * 所以做法是"包一圈"：
- * <ol>
- *   <li>tesselate 之前把该方块的 alpha 放进 {@link MovingBlockRenderContext}
- *       （用 try/finally 保证一定清掉，异常时也不会污染后续渲染）；</li>
- *   <li>取 {@code VertexConsumer} 时，如果有有效 alpha，
- *       把 RenderType 换成 {@code RenderTypes.translucentMovingBlock()}，
- *       这样 {@code BufferSourceHooks.wrap} 会顺势套上 {@code AlphaVertexConsumer}。</li>
- * </ol>
- *
- * <p>注意 {@code getAlpha(state, pos, true)} 的第三个参数 {@code moving = true}：
- * 它会让 manager 从 {@code PistonMovingBlockEntity} 里取出<b>真正被推的那个方块</b>来判定，
- * 而不是拿 {@code moving_piston} 这个壳去比对名单。
- *
- * <p>两个 {@code require = 0}：这两个目标方法在不同版本里名字/签名会变，
- * 找不到就静默跳过（表现为"移动方块不变淡"，不影响其它功能）。
- */
+/** 为活塞移动方块设置渲染透明度和半透明 RenderType。 */
 @Mixin(MovingBlockFeatureRenderer.class)
 public class BlockFeatureRendererMixin {
 	@Unique

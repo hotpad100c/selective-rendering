@@ -4,12 +4,7 @@ import com.selectiverendering.compat.Platform;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 
-/**
- * 配置界面的打开入口：ModMenu（{@code ModMenuIntegration}）、
- * MaLiLib 的屏幕工厂、以及打开配置的快捷键回调，都汇聚到这里。
- *
- * <p>另外提供两个取"按键显示名"的静态方法给 HUD 提示用。
- */
+/** 提供配置界面的打开入口和按键显示名。 */
 public final class ModConfigScreen {
 	private ModConfigScreen() {
 	}

@@ -9,10 +9,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 
-/**
- * FRAPI 版"AO 计算当空气"：对应原版 {@code BlockModelLighterMixin}，逻辑一致。
- * 三份光照补丁之一，详见 {@code LightDataAccessMixin} 的注释。
- */
+/** 在 Indigo 的 AO 计算中将隐藏方块视为空气。 */
 @Mixin(targets = "net.fabricmc.fabric.impl.client.indigo.renderer.aocalc.AoCalculator", remap = false)
 public class FabricRendererApiLightMixin {
 	@WrapOperation(

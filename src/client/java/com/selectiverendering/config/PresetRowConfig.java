@@ -8,14 +8,7 @@ import fi.dy.masa.malilib.config.ConfigType;
 import fi.dy.masa.malilib.config.IConfigValue;
 import fi.dy.masa.malilib.config.options.ConfigBase;
 
-/**
- * 一个"假的"配置项：把一行 {@link Preset} 伪装成 MaLiLib 的配置项，
- * 这样它才能被塞进 {@code GuiConfigsBase} 的配置列表里显示出来。
- *
- * <p>它并不真的参与配置的读/写/重置（{@code isModified} 恒为 false，
- * {@code resetToDefault} 是空的），只是借壳显示；
- * 真正的预设增删改名在 {@link ModPresets} 和 {@link WidgetPresetRow} 里。
- */
+/** 将预设包装为 MaLiLib 配置行，仅用于界面展示。 */
 public final class PresetRowConfig extends ConfigBase<PresetRowConfig> implements IConfigValue {
 	private final Preset preset;
 

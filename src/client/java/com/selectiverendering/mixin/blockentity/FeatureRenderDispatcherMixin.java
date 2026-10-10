@@ -11,13 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /*import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 *///?}
 
-/**
- * 每帧结束时清掉"本帧被标记要变透明的 RenderType"。
- *
- * <p>见 {@link HiddenRenderTypes}：标记只在<b>一帧之内</b>有效，
- * 不然上一帧的标记会一直给后续所有帧的方块实体套 alpha。
- * {@code prepareFrame} 是每帧都会走一次的入口，选它当清理点。
- */
+/** 在帧边界清除 RenderType 的透明度标记。 */
 @Mixin(FeatureRenderDispatcher.class)
 public class FeatureRenderDispatcherMixin {
 	//? if >=26.2 {

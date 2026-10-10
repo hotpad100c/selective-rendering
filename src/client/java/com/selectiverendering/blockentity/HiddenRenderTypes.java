@@ -6,9 +6,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
 
-/**
- * "这一帧里，哪些 {@link RenderType} 需要被强行修改透明度" 的临时标记集合。
- */
+/** 记录本帧需要覆盖透明度的 RenderType。 */
 public final class HiddenRenderTypes {
 	private static final Set<RenderType> MARKED = Collections.newSetFromMap(new IdentityHashMap<>());
 

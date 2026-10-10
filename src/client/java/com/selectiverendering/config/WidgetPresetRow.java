@@ -14,15 +14,7 @@ import fi.dy.masa.malilib.gui.widgets.WidgetConfigOption;
 import fi.dy.masa.malilib.gui.widgets.WidgetListConfigOptionsBase;
 import fi.dy.masa.malilib.gui.wrappers.TextFieldWrapper;
 
-/**
- * 一行预设：左边是名字输入框（悬停显示摘要），右边是 切换 / 覆盖 / 删除 三个按钮。
- *
- * <p>布局是手算的：先按文字宽度算出三个按钮的宽度，从"重置按钮的右边界"往左排，
- * 剩下的空间全给输入框。{@link #resetButtonRight} 复刻了 MaLiLib 内部的算法，
- * 保证这一行和其它配置行的右边界对齐。
- *
- * <p>改名即时生效并落盘（{@link NameListener}）。
- */
+/** 显示预设名称及切换、覆盖、删除按钮。 */
 public final class WidgetPresetRow extends WidgetConfigOption {
 	private static final int MIN_BUTTON_WIDTH = 36;
 	private static final int BUTTON_GAP = 4;
@@ -98,12 +90,7 @@ public final class WidgetPresetRow extends WidgetConfigOption {
 		}
 	}
 
-	/**
-	 * 输入框改动即时写回预设名字并落盘。
-	 *
-	 * <p>早年的实现恒返回 false，改名后只有点"覆盖"或重开界面才会保存，
-	 * 是个容易被当成 bug 的交互瑕疵。
-	 */
+	/** 修改预设名称并保存。 */
 	private static final class NameListener implements ITextFieldListener<GuiTextFieldGeneric> {
 		private final Preset preset;
 

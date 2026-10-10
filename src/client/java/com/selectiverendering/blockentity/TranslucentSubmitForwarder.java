@@ -43,14 +43,10 @@ import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 
-/**
- * 把 {@link OrderedSubmitNodeCollector} 的每个提交转发给 {@link #target()}，转发前把 RenderType 换成半透明变体。
- */
+/** 转发渲染提交，并将 RenderType 替换为半透明变体。 */
 abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector {
-	/** 转发的目的地。 */
 	protected abstract OrderedSubmitNodeCollector target();
 
-	// ───────────── 会换成半透明 RenderType 的提交 ─────────────
 
 	//? if >=26.3 {
 	@Override
@@ -128,7 +124,6 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.translucentVariant(renderType), renderer);
 	}
 
-	// ───────────── 原样转发：各版本签名一致的 ─────────────
 
 	@Override
 	public void submitShadow(@NonNull PoseStack poseStack, float radius, @NonNull List<EntityRenderState.ShadowPiece> pieces) {
@@ -161,7 +156,6 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 		target().submitLeash(poseStack, leashState);
 	}
 
-	// ───────────── 原样转发：随版本变的 ─────────────
 
 	//? if >=26.2 {
 	@Override

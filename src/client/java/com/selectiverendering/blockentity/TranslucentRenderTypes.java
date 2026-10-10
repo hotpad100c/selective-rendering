@@ -9,9 +9,7 @@ import net.minecraft.resources.Identifier;
 
 import java.util.Map;
 
-/**
- * 为一个 {@link RenderType} 构造出它的"半透明版本"。
- */
+/** 构造 RenderType 的半透明变体。 */
 public final class TranslucentRenderTypes {
 	private TranslucentRenderTypes() {
 	}

@@ -4,12 +4,7 @@ import com.selectiverendering.SelectiveRendering;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * 日志门面。
- *
- * <p>默认走 INFO。加 JVM 参数 {@code -Dselective_rendering.log=warn} 可以全部提到 WARN 级别
- * ——调试时很有用，因为很多玩家的日志收集工具默认过滤 INFO。
- */
+/** 日志入口，可用 JVM 参数 -Dselective_rendering.log=warn 将输出级别设为 WARN。 */
 public final class Log {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SelectiveRendering.MOD_ID);
 	private static final boolean WARN = "warn".equalsIgnoreCase(System.getProperty("selective_rendering.log"));

@@ -18,30 +18,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * 移动方块（moving_piston）的提交阶段处理，两点：
- *
- * <h2>1. alpha == 0 时直接不提交</h2>
- * <p>和 {@code BlockFeatureRendererMixin} 是一对：那边管"半透明"，
- * 这边管"完全不画"。完全隐藏必须在<b>提交阶段</b>就拦掉，
- * 否则后面换 RenderType 也救不回来。
- *
- * <h2>2. 该淡化的移动方块必须进"半透明相位"（这是 26.2/26.3 的关键修复）</h2>
- * <p>原版用 {@code model.hasMaterialFlag(FLAG_TRANSLUCENT)} 决定这个移动方块
- * 进 {@code translucentBlocksAndItems}（按距离排序的半透明相位）
- * 还是 {@code solid}（先画、不排序的不透明相位）。
- *
- * <p>问题在于：我们让一个<b>本来不透明</b>的方块（比如石头）变淡时，
- * 它的模型并没有半透明材质标志，于是被扔进了 solid 相位——
- * 但 {@code putBakedQuad} 那边又把它的 RenderType 换成了 {@code translucentMovingBlock()}。
- * 结果是：它的几何在 solid 相位里被先画出来（此时它身后的东西还没画），
- * depth 已经写上，等轮到身后的方块时就全部被深度测试挡掉了。
- * 表现为"从某些朝向看，淡化中的移动方块把身后<b>没</b>淡化的移动方块整个挡住"，
- * 而且是否复现取决于这两个方块的提交顺序，所以是"有的朝向才看得见"。
- *
- * <p>修法与 26.1.2 的 {@code BlockFeatureRendererMixin#selectiveRendering$translucentPass} 一致：
- * 只要这个移动方块正被淡化，就谎报"我有半透明材质"，让它进半透明相位参与排序。
- */
+/** 跳过完全隐藏的移动方块，并将淡化方块送入半透明排序阶段。 */
 @Mixin(SubmitNodeCollection.class)
 public class SubmitNodeCollectionMixin {
 	@Inject(method = "submitMovingBlock", at = @At("HEAD"), cancellable = true, require = 1)

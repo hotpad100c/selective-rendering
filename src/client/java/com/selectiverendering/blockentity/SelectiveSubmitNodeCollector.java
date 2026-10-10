@@ -4,9 +4,7 @@ import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import org.jspecify.annotations.NonNull;
 
-/**
- * 间谍SubmitNodeCollector。它包装普通SubmitNodeCollector并利用TranslucentSubmitForwarder转发提交到半透明处理器。
- */
+/** 包装渲染提交器，将提交转发到半透明渲染管线。 */
 public class SelectiveSubmitNodeCollector extends TranslucentSubmitForwarder implements SubmitNodeCollector {
 	private final SubmitNodeCollector base;
 

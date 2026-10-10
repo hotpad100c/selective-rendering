@@ -7,20 +7,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 一个轴对齐的<b>方块</b>选区（闭区间：min 和 max 两个角都包含在内）。
- *
- * <p>坐标都是整数方块坐标，不是浮点；要画出来时用 {@link #box()} 转成 {@link AABB}
- * （会自动 {@code +1}，因为一格方块占 [x, x+1) 的范围）。
- *
- * <p>本类是不可变 record，可以直接当 Map/Set 的键用；
- * {@link #of} 负责把任意两个角点归一化成 min/max。
- *
- * <p>思路对标 Litematica 的 {@code Box} / Lucidity 的 {@code AreaBox}，
- * 但这里刻意保持最简：不存维度、不存颜色、不参与渲染，只做几何与序列化。
- */
+/** 轴对齐的整数方块选区，包含 min 和 max 两端。 */
 public record Region(BlockPos min, BlockPos max) {
-	/** 由任意两个角点构造，自动归一化成 min/max。 */
 	public static Region of(BlockPos first, BlockPos second) {
 		return new Region(
 			new BlockPos(
@@ -43,13 +31,7 @@ public record Region(BlockPos min, BlockPos max) {
 		);
 	}
 
-	/**
-	 * 集合减法：从本区域里挖掉 {@code cut}，返回剩下的部分（0~6 个盒子）。
-	 *
-	 * <p>做法是标准的"三轴切块"：先切 X 方向的两个侧片，再在中间柱子上切 Y，最后切 Z。
-	 * 重叠部分被完全丢弃，所以如果 {@code cut} 完全包含本区域，会返回空列表
-	 * ——{@code RegionEditor#clipRegions} 正是靠这一点来删除选区的。
-	 */
+	/** 从选区中减去 cut，返回剩余的至多六个长方体。 */
 	public List<Region> subtract(Region cut) {
 		Region overlap = overlap(cut);
 		if (overlap == null) {
@@ -125,10 +107,7 @@ public record Region(BlockPos min, BlockPos max) {
 			&& pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
 	}
 
-	/**
-	 * 序列化成一个可读字符串："minX,minY,minZ:maxX,maxY,maxZ"。
-	 * 这个格式会直接出现在配置文件 {@code regions} 和预设里，也会显示在配置 GUI 中。
-	 */
+	/** 序列化为 minX,minY,minZ:maxX,maxY,maxZ。 */
 	public String toSource() {
 		return source(min) + ":" + source(max);
 	}

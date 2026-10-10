@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.client.Minecraft;
 //?}
 
-// ImmediatelyFast 用 BatchableBufferSource 替换了 BufferSource，BufferSourceMixin 打不到；26.2+ 不再需要，这里是空壳
+// 26.1.2 的 ImmediatelyFast 缓冲入口。
 //? if <26.2 {
 /*@Mixin(targets = "net.raphimc.immediatelyfast.feature.core.BatchableBufferSource", remap = false)
 public class ImmediatelyFastBufferSourceMixin {

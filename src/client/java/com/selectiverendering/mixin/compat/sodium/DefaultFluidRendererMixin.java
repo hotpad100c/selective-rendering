@@ -30,23 +30,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Sodium 版"流体淡化"，对应原版的 {@code FluidRendererMixin} + {@code FluidModelMixin}。
- *
- * <p>Sodium 的流体渲染比原版复杂，所以要补的点更多：
- * <ul>
- *   <li>{@code render} HEAD：算 alpha，为 0 就取消；同时记下本次渲染用的世界切片，
- *       供下面的面判定取邻居状态（见 {@link #selectiveRendering$level}）；</li>
- *   <li>{@code isFullBlockFluidSideVisible} / {@code getUpFaceExposureByNeighbors} /
- *       {@code isFluidSideExposed}：三个"这个面该不该画"的判定，
- *       邻居被隐藏时要改成"画"，否则液面会缺口；</li>
- *   <li>{@code writeQuad}：把 alpha 写进 {@code quadColors} 和 {@code vertices}（两个数组都要改，
- *       因为 Sodium 会分别用到）；材质换成 {@code DefaultMaterials.TRANSLUCENT}。</li>
- * </ul>
- *
- * <p>换材质的条件统一为 {@code 0 < alpha < 255}（见 {@code BlockRendererMixin} 的说明），
- * 避免透明度 0% 时白白把流体挪进半透明层。
- */
+/** 为 Sodium 流体渲染应用透明度、半透明材质和邻居面判定修正。 */
 @Mixin(value = DefaultFluidRenderer.class, remap = false)
 public class DefaultFluidRendererMixin {
 	@Shadow
@@ -63,15 +47,7 @@ public class DefaultFluidRendererMixin {
 	@Unique
 	private BlockPos selectiveRendering$pos;
 
-	/**
-	 * 本次 {@code render} 使用的世界切片。
-	 *
-	 * <p>为什么要记：{@code isFluidSideExposed} 需要从"当前流体的位置反推邻居"，
-	 * 而它拿不到 level。以前用 {@code Alpha.isHiddenAt(...)}，
-	 * 内部是 {@code Minecraft.getInstance().level}——那是在<b>区块构建工作线程</b>上
-	 * 读客户端世界，而且不一定是当前正在构建的那一份数据。
-	 * 这里改成用 {@code render} 传进来的 {@link LevelSlice}（线程隔离的拷贝），两全其美。
-	 */
+	/** 本次流体渲染使用的世界切片，供邻居判定读取。 */
 	@Unique
 	private BlockGetter selectiveRendering$level;
 
@@ -131,7 +107,6 @@ public class DefaultFluidRendererMixin {
 			return original;
 		}
 
-		// aboveState 已经取过了，直接用它判定，不重复查表
 		return Alpha.isHidden(aboveState, above) ? bothExposed : original;
 	}
 
