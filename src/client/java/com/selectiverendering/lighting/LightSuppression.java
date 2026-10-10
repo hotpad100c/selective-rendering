@@ -445,7 +445,7 @@ public final class LightSuppression {
 	}
 
 	private static List<Region> targets() {
-		List<Region> regions = SelectiveRenderingManager.regions();
+		List<Region> regions = SelectiveRenderingManager.blockRegions();
 
 		synchronized (LOCK) {
 			List<Region> targets = new ArrayList<>(regions.size() + RETIRED_REGIONS.size());

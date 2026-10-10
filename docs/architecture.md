@@ -14,7 +14,7 @@ src/
 └── client/java/com/selectiverendering/
     ├── SelectiveRendering.java          入口
     ├── SelectiveRenderingManager.java   ★ 状态中心：全部可变状态 + 设置项 + 快照发布 + 落盘
-    ├── RenderConfig.java                不可变快照（渲染线程只读它）
+    ├── RenderConfig.java                不可变快照（渲染线程只读它）；用 Builder 构造，加字段只改 Builder / 本类 / publish()
     ├── render/                          方块 / 区块渲染的判定与调度
     │   ├── Alpha.java                   ★ 判定层：getAlpha()/alphaNow()…"这个方块淡不淡"
     │   ├── RebuildScheduler.java        改完之后重烘焙哪些 section（三档）
@@ -31,7 +31,8 @@ src/
     ├── lighting/
     │   └── LightSuppression.java        ★ 光照：伪装(airIfHidden) + 标记 + 分批重算
     ├── region/                          选区与魔杖
-    │   ├── Region.java                  选区几何（含 subtract 挖洞）
+    │   ├── Region.java                  选区几何（含 subtract 挖洞）；相等性只看范围，附带 RegionOptions
+    │   ├── RegionOptions.java           选区自己的隐藏对象开关（方块/实体/粒子）和本地方块名单
     │   ├── RegionEditor.java            魔杖双角点 + 选区的增/删/裁/点选
     │   ├── RegionMerger.java            散点坐标 → 长方体（贪心合并）
     │   ├── CameraRay.java               ★ 魔杖射线：从渲染相机出发、穿过鼠标指针
@@ -220,6 +221,19 @@ synchronized (LOCK) {
 新增配置项：在 `ModConfigs` 里 `new ConfigXxx(name, ...).apply(KEY)` 并加进 `OPTIONS`（界面按这个顺序列出），
 然后在 `lang/*.json` 里补 `selective_rendering.config.name.<name>` / `.comment.<name>`
 （快捷键类再补 `.prettyName.<name>`）。翻译走 Minecraft 标准语言文件，由 Fabric API 的 resource loader 加载（MaLiLib 本身就依赖它）。
+
+### 选区行（可展开）
+
+`ModConfigGui` 在全局配置项之后列出每个选区：`RegionRowConfig` 是个假配置项，由 `WidgetRegionRow` 画出
+展开按钮 / 范围 / 删除；展开后追加两行角点（只读标签）、一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，
+每项后跟一个方形小按钮）和一个本地 `ConfigStringList`。展开状态按几何范围记在 `ModConfigGui.EXPANDED`；
+标题行在 `render` 里登记外框，由列表控件的 `drawContents` 统一画在最上层。
+改动经 `RegionEditor.updateRegion` 替换 `REGIONS` 里的对应项，并触发重建和光照重算。
+
+- 方块判定只用 `blocks` 为真的选区（`RenderConfig.blockRegions`）；本地名单与全局名单取并集，
+  只在选区内部且模式用到名单时生效（`Alpha.listedLocally`）。
+- `entities` / `particles` 目前只存盘和显示，没有实际效果。
+- 预设里的选区仍是纯范围字符串，应用预设会恢复默认开关。
 
 配置项本身只是"视图"，权威数据源永远是 `SelectiveRenderingManager`；
 落盘由 `ModConfig.save()` 防抖异步完成。

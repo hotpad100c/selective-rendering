@@ -69,11 +69,7 @@ public class DefaultFluidRendererMixin {
 		at = @At("RETURN")
 	)
 	private boolean selectiveRendering$onIsFullBlockFluidSideVisible(boolean original, BlockGetter view, BlockPos selfPos, Direction facing, FluidState fluid) {
-		if (original || !facing.getAxis().isHorizontal()) {
-			return original;
-		}
-
-		if (SelectiveRenderingManager.getMode() == SelectiveRenderingManager.Mode.OFF) {
+		if (original || SelectiveRenderingManager.getMode() == SelectiveRenderingManager.Mode.OFF) {
 			return original;
 		}
 
@@ -83,7 +79,7 @@ public class DefaultFluidRendererMixin {
 			return original;
 		}
 
-		return !neighbourState.getFluidState().getType().isSame(fluid.getType());
+		return facing.getAxis().isHorizontal() || neighbourState.getFluidState().getType().isSame(fluid.getType());
 	}
 
 	@ModifyReturnValue(

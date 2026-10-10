@@ -74,8 +74,7 @@ public final class ModConfig {
 	/** 角点坐标 [x,y,z]，null 表示未设置。 */
 	public int[] regionPos2 = null;
 
-	/** 已保存选区，格式为 [minX,minY,minZ,maxX,maxY,maxZ]。 */
-	public List<int[]> regions = new ArrayList<>();
+	public List<RegionEntry> regionEntries = new ArrayList<>();
 
 	public List<Preset> presets = new ArrayList<>();
 
@@ -92,6 +91,16 @@ public final class ModConfig {
 	public boolean passThrough = SelectiveRenderingManager.DEFAULT_PASS_THROUGH;
 
 	private ModConfig() {
+	}
+
+	/** 单个选区的落盘形式。 */
+	public static final class RegionEntry {
+		/** [minX,minY,minZ,maxX,maxY,maxZ] */
+		public int[] box;
+		public boolean blocks = true;
+		public boolean entities = false;
+		public boolean particles = false;
+		public List<String> rules = new ArrayList<>();
 	}
 
 	public static ModConfig get() {
@@ -134,8 +143,8 @@ public final class ModConfig {
 			config.rules = new ArrayList<>();
 		}
 
-		if (config.regions == null) {
-			config.regions = new ArrayList<>();
+		if (config.regionEntries == null) {
+			config.regionEntries = new ArrayList<>();
 		}
 
 		if (config.hotkeys != null && !config.hotkeys.isJsonObject()) {

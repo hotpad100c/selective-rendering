@@ -37,7 +37,7 @@ import fi.dy.masa.malilib.util.data.ModInfo;
 
 /** 连接 MaLiLib 配置控件与运行时设置。 */
 public final class ModConfigs {
-	private static final String KEY = SelectiveRendering.MOD_ID + ".config";
+	static final String KEY = SelectiveRendering.MOD_ID + ".config";
 	private static final String MOD_NAME = "Selective Rendering";
 	private static final String HOTKEY_CATEGORY = "Hotkeys";
 
@@ -45,7 +45,6 @@ public final class ModConfigs {
 	public static final ConfigBoolean INVERT = new ConfigBoolean("invert", SelectiveRenderingManager.DEFAULT_INVERT).apply(KEY);
 	public static final TransparencyConfig TRANSPARENCY = new TransparencyConfig("transparency").apply(KEY);
 	public static final ConfigStringList RULES = new ConfigStringList("items", ImmutableList.of()).apply(KEY);
-	public static final ConfigStringList REGIONS = new ConfigStringList("regions", ImmutableList.of()).apply(KEY);
 	public static final ConfigHotkey BLOCKS_KEY = new ConfigHotkey("blocks_key", "LEFT_ALT", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey REGION_KEY = new ConfigHotkey("region_key", "LEFT_CONTROL", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
@@ -62,7 +61,6 @@ public final class ModConfigs {
 		INVERT,
 		TRANSPARENCY,
 		RULES,
-		REGIONS,
 		BLOCKS_KEY,
 		REGION_KEY,
 		OPEN_CONFIG_GUI,
@@ -89,7 +87,6 @@ public final class ModConfigs {
 		INVERT.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setInvert(config.getBooleanValue())));
 		TRANSPARENCY.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setTransparency(config.getIntegerValue())));
 		RULES.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setRuleSources(config.getStrings())));
-		REGIONS.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setRegionSources(config.getStrings())));
 		WAND.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setWand(config.getStringValue())));
 		FULL_BRIGHT.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setFullBright(config.getBooleanValue())));
 		PASS_THROUGH.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setPassThrough(config.getBooleanValue())));
@@ -136,7 +133,6 @@ public final class ModConfigs {
 			INVERT.setBooleanValue(SelectiveRenderingManager.isInvert());
 			TRANSPARENCY.setExactValue(SelectiveRenderingManager.getTransparency());
 			RULES.setStrings(SelectiveRenderingManager.ruleSources());
-			REGIONS.setStrings(SelectiveRenderingManager.regionSources());
 			WAND.setValueFromString(SelectiveRenderingManager.getWand());
 			FULL_BRIGHT.setBooleanValue(SelectiveRenderingManager.isFullBright());
 			PASS_THROUGH.setBooleanValue(SelectiveRenderingManager.isPassThrough());

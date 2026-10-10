@@ -12,65 +12,135 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/** 不可变的渲染配置快照，供渲染侧统一读取。 */
-public record RenderConfig(
-	Mode mode,
-	int transparency,
-	boolean invert,
-	List<BlockMatchRule> rules,
-	List<BlockMatchRule> recorded,
-	List<Region> regions,
-	List<Preset> presets,
-	RecordMode recordMode,
-	RecordApplyMode recordApplyMode,
-	String wand,
-	boolean fullBright,
-	boolean passThrough,
-	BlockPos corner1,
-	BlockPos corner2,
-	AABB region,
-	int alpha,
-	Region union
-) {
-	static RenderConfig initial() {
-		return of(
-			SelectiveRenderingManager.DEFAULT_MODE, SelectiveRenderingManager.DEFAULT_TRANSPARENCY, SelectiveRenderingManager.DEFAULT_INVERT,
-			List.of(), List.of(), List.of(), List.of(),
-			SelectiveRenderingManager.DEFAULT_RECORD_MODE, SelectiveRenderingManager.DEFAULT_RECORD_APPLY_MODE,
-			SelectiveRenderingManager.DEFAULT_WAND, SelectiveRenderingManager.DEFAULT_FULL_BRIGHT, SelectiveRenderingManager.DEFAULT_PASS_THROUGH,
-			null, null, null
-		);
+/** 不可变的渲染配置快照，供渲染侧统一读取。新增字段：Builder 里加一个、这里加字段和访问器。 */
+public final class RenderConfig {
+	private final Mode mode;
+	private final int transparency;
+	private final boolean invert;
+	private final List<BlockMatchRule> rules;
+	private final List<BlockMatchRule> recorded;
+	private final List<Region> regions;
+	private final List<Preset> presets;
+	private final RecordMode recordMode;
+	private final RecordApplyMode recordApplyMode;
+	private final String wand;
+	private final boolean fullBright;
+	private final boolean passThrough;
+	private final BlockPos corner1;
+	private final BlockPos corner2;
+	private final AABB region;
+
+	private final int alpha;
+	private final List<Region> blockRegions;
+	private final Region union;
+	private final boolean hasLocalRules;
+
+	private RenderConfig(Builder builder) {
+		this.mode = builder.mode;
+		this.transparency = builder.transparency;
+		this.invert = builder.invert;
+		this.rules = List.copyOf(builder.rules);
+		this.recorded = List.copyOf(builder.recorded);
+		this.regions = List.copyOf(builder.regions);
+		this.presets = List.copyOf(builder.presets);
+		this.recordMode = builder.recordMode;
+		this.recordApplyMode = builder.recordApplyMode;
+		this.wand = builder.wand;
+		this.fullBright = builder.fullBright;
+		this.passThrough = builder.passThrough;
+		this.corner1 = builder.corner1;
+		this.corner2 = builder.corner2;
+		this.region = builder.region;
+
+		this.alpha = Math.round(255F * (SelectiveRenderingManager.MAX_TRANSPARENCY - transparency) / SelectiveRenderingManager.MAX_TRANSPARENCY);
+		this.blockRegions = regions.stream().filter(added -> added.options().blocks()).toList();
+		this.union = unionOf(blockRegions);
+		this.hasLocalRules = blockRegions.stream().anyMatch(added -> !added.options().rules().isEmpty());
 	}
 
-	static RenderConfig of(
-		Mode mode,
-		int transparency,
-		boolean invert,
-		List<BlockMatchRule> rules,
-		List<BlockMatchRule> recorded,
-		List<Region> regions,
-		List<Preset> presets,
-		RecordMode recordMode,
-		RecordApplyMode recordApplyMode,
-		String wand,
-		boolean fullBright,
-		boolean passThrough,
-		@Nullable BlockPos corner1,
-		@Nullable BlockPos corner2,
-		@Nullable AABB region
-	) {
-		return new RenderConfig(
-			mode, transparency, invert,
-			rules, recorded, regions, presets,
-			recordMode, recordApplyMode,
-			wand, fullBright, passThrough,
-			corner1, corner2, region,
-			Math.round(255F * (SelectiveRenderingManager.MAX_TRANSPARENCY - transparency) / SelectiveRenderingManager.MAX_TRANSPARENCY),
-			unionOf(regions)
-		);
+	public Mode mode() {
+		return mode;
 	}
 
-	/** 所有选区的包围盒；没有选区时返回 null。 */
+	public int transparency() {
+		return transparency;
+	}
+
+	public boolean invert() {
+		return invert;
+	}
+
+	public List<BlockMatchRule> rules() {
+		return rules;
+	}
+
+	public List<BlockMatchRule> recorded() {
+		return recorded;
+	}
+
+	public List<Region> regions() {
+		return regions;
+	}
+
+	public List<Preset> presets() {
+		return presets;
+	}
+
+	public RecordMode recordMode() {
+		return recordMode;
+	}
+
+	public RecordApplyMode recordApplyMode() {
+		return recordApplyMode;
+	}
+
+	public String wand() {
+		return wand;
+	}
+
+	public boolean fullBright() {
+		return fullBright;
+	}
+
+	public boolean passThrough() {
+		return passThrough;
+	}
+
+	@Nullable
+	public BlockPos corner1() {
+		return corner1;
+	}
+
+	@Nullable
+	public BlockPos corner2() {
+		return corner2;
+	}
+
+	@Nullable
+	public AABB region() {
+		return region;
+	}
+
+	/** 隐藏方块使用的顶点 alpha，由透明度换算。 */
+	public int alpha() {
+		return alpha;
+	}
+
+	/** 参与方块判定的选区。 */
+	public List<Region> blockRegions() {
+		return blockRegions;
+	}
+
+	/** {@link #blockRegions()} 的包围盒；没有时为 null。 */
+	@Nullable
+	public Region union() {
+		return union;
+	}
+
+	public boolean hasLocalRules() {
+		return hasLocalRules;
+	}
+
 	@Nullable
 	private static Region unionOf(List<Region> regions) {
 		if (regions.isEmpty()) {
@@ -97,5 +167,27 @@ public record RenderConfig(
 		}
 
 		return new Region(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
+	}
+
+	public static final class Builder {
+		public Mode mode = SelectiveRenderingManager.DEFAULT_MODE;
+		public int transparency = SelectiveRenderingManager.DEFAULT_TRANSPARENCY;
+		public boolean invert = SelectiveRenderingManager.DEFAULT_INVERT;
+		public List<BlockMatchRule> rules = List.of();
+		public List<BlockMatchRule> recorded = List.of();
+		public List<Region> regions = List.of();
+		public List<Preset> presets = List.of();
+		public RecordMode recordMode = SelectiveRenderingManager.DEFAULT_RECORD_MODE;
+		public RecordApplyMode recordApplyMode = SelectiveRenderingManager.DEFAULT_RECORD_APPLY_MODE;
+		public String wand = SelectiveRenderingManager.DEFAULT_WAND;
+		public boolean fullBright = SelectiveRenderingManager.DEFAULT_FULL_BRIGHT;
+		public boolean passThrough = SelectiveRenderingManager.DEFAULT_PASS_THROUGH;
+		public BlockPos corner1;
+		public BlockPos corner2;
+		public AABB region;
+
+		public RenderConfig build() {
+			return new RenderConfig(this);
+		}
 	}
 }

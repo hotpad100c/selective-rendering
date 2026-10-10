@@ -239,6 +239,34 @@ public final class RegionEditor {
 		return true;
 	}
 
+	/** 用 updated 替换 old（按几何定位）；范围或开关变了都会重建并重算光照。 */
+	public static boolean updateRegion(Region old, Region updated) {
+		synchronized (SelectiveRenderingManager.LOCK) {
+			int index = SelectiveRenderingManager.REGIONS.indexOf(old);
+			if (index < 0) {
+				return false;
+			}
+
+			int clash = SelectiveRenderingManager.REGIONS.indexOf(updated);
+			if (clash >= 0 && clash != index) {
+				return false;
+			}
+
+			SelectiveRenderingManager.REGIONS.set(index, updated);
+			SelectiveRenderingManager.commitAndRemember();
+		}
+
+		if (SelectiveRenderingManager.getMode().usesRegion()) {
+			HiddenSections.mark(old.box());
+			HiddenSections.mark(updated.box());
+
+			LightSuppression.retire(List.of(old));
+			LightSuppression.relight();
+		}
+
+		return true;
+	}
+
 	public static boolean removeRegionAt(BlockPos pos) {
 		synchronized (SelectiveRenderingManager.LOCK) {
 			return removeRegions(SelectiveRenderingManager.REGIONS.stream().filter(added -> added.contains(pos)).toList());

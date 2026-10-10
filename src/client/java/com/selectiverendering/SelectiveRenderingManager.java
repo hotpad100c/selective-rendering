@@ -6,6 +6,7 @@ import com.selectiverendering.lighting.LightSuppression;
 import com.selectiverendering.matchingrule.BlockMatchRule;
 import com.selectiverendering.recording.BlockChangeRecorder;
 import com.selectiverendering.region.Region;
+import com.selectiverendering.region.RegionOptions;
 import com.selectiverendering.region.RegionEditor;
 import com.selectiverendering.render.Alpha;
 import com.selectiverendering.render.HiddenSections;
@@ -109,7 +110,6 @@ public final class SelectiveRenderingManager {
 	private static final List<Preset> PRESETS = new ArrayList<>();
 
 	private static volatile List<String> ruleSourceInput = List.of();
-	private static volatile List<String> regionSourceInput = List.of();
 	private static volatile List<String> recordSourceInput = List.of();
 
 	/** 记录器的名单过滤方式，独立于渲染名单。 */
@@ -228,7 +228,7 @@ public final class SelectiveRenderingManager {
 	private static AABB region;
 
 	/** 供渲染侧读取的配置快照，由 publish 整体替换。 */
-	private static volatile RenderConfig config = RenderConfig.initial();
+	private static volatile RenderConfig config = new RenderConfig.Builder().build();
 
 	public static RenderConfig config() {
 		return config;
@@ -281,12 +281,10 @@ public final class SelectiveRenderingManager {
 				}
 			}
 
-			if (config.regions != null) {
-				for (int[] values : config.regions) {
-					Region added = toRegion(values);
-					if (added != null) {
-						REGIONS.add(added);
-					}
+			for (ModConfig.RegionEntry entry : config.regionEntries) {
+				Region added = toRegion(entry);
+				if (added != null && !REGIONS.contains(added)) {
+					REGIONS.add(added);
 				}
 			}
 
@@ -352,36 +350,12 @@ public final class SelectiveRenderingManager {
 		return config.regions();
 	}
 
-	public static List<String> regionSources() {
-		return config.regions().stream().map(Region::toSource).toList();
+	public static List<Region> blockRegions() {
+		return config.blockRegions();
 	}
 
-	public static void setRegionSources(List<String> sources) {
-		List<String> wanted = sources == null ? List.of() : List.copyOf(sources);
-		if (wanted.equals(regionSourceInput)) {
-			return;
-		}
-
-		regionSourceInput = wanted;
-
-		synchronized (LOCK) {
-			REGIONS.clear();
-
-			if (sources != null) {
-				for (String source : sources) {
-					Region parsed = Region.parse(source);
-					if (parsed != null && !REGIONS.contains(parsed)) {
-						REGIONS.add(parsed);
-					}
-				}
-			}
-
-			commit();
-		}
-
-		if (getMode().usesRegion()) {
-			RebuildScheduler.rebuildChunks();
-		}
+	public static List<String> regionSources() {
+		return config.regions().stream().map(Region::toSource).toList();
 	}
 
 	public static void updateRegion() {
@@ -681,6 +655,25 @@ public final class SelectiveRenderingManager {
 		};
 	}
 
+	private static ModConfig.RegionEntry toEntry(Region region) {
+		ModConfig.RegionEntry entry = new ModConfig.RegionEntry();
+		entry.box = toArray(region);
+		entry.blocks = region.options().blocks();
+		entry.entities = region.options().entities();
+		entry.particles = region.options().particles();
+		entry.rules = new ArrayList<>(region.options().ruleSources());
+		return entry;
+	}
+
+	private static Region toRegion(ModConfig.RegionEntry entry) {
+		Region box = entry == null ? null : toRegion(entry.box);
+		if (box == null) {
+			return null;
+		}
+
+		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, null).withRuleSources(entry.rules));
+	}
+
 	private static Region toRegion(int[] values) {
 		return values == null || values.length != 6 ? null : new Region(
 			new BlockPos(values[0], values[1], values[2]),
@@ -764,29 +757,28 @@ public final class SelectiveRenderingManager {
 
 	/** 发布新的配置快照并使判定缓存失效；调用方须持有 LOCK。 */
 	private static void publish() {
-		config = RenderConfig.of(
-			mode,
-			transparency,
-			invert,
-			List.copyOf(RULES),
-			List.copyOf(RECORDED),
-			List.copyOf(REGIONS),
-			List.copyOf(PRESETS),
-			recordMode,
-			recordApplyMode,
-			wand,
-			fullBright,
-			passThrough,
-			corner1,
-			corner2,
-			region
-		);
+		RenderConfig.Builder next = new RenderConfig.Builder();
+		next.mode = mode;
+		next.transparency = transparency;
+		next.invert = invert;
+		next.rules = RULES;
+		next.recorded = RECORDED;
+		next.regions = REGIONS;
+		next.presets = PRESETS;
+		next.recordMode = recordMode;
+		next.recordApplyMode = recordApplyMode;
+		next.wand = wand;
+		next.fullBright = fullBright;
+		next.passThrough = passThrough;
+		next.corner1 = corner1;
+		next.corner2 = corner2;
+		next.region = region;
+		config = next.build();
 	}
 
 	/** 缓存界面输入，避免配置同步触发重复写回。 */
 	private static void rememberSources() {
 		ruleSourceInput = RULES.stream().map(BlockMatchRule::source).toList();
-		regionSourceInput = REGIONS.stream().map(Region::toSource).toList();
 
 		recordSourceInput = RECORDED.stream().map(BlockMatchRule::source).toList();
 	}
@@ -805,7 +797,7 @@ public final class SelectiveRenderingManager {
 		config.recorded = RECORDED.stream().map(BlockMatchRule::source).toList();
 		config.regionPos1 = toArray(corner1);
 		config.regionPos2 = toArray(corner2);
-		config.regions = REGIONS.stream().map(SelectiveRenderingManager::toArray).toList();
+		config.regionEntries = REGIONS.stream().map(SelectiveRenderingManager::toEntry).toList();
 		config.presets = new ArrayList<>(PRESETS);
 		ModConfig.save();
 	}

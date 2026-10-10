@@ -1,4 +1,4 @@
-package com.selectiverendering.mixin.region;
+package com.selectiverendering.mixin;
 
 import com.selectiverendering.SelectiveRendering;
 import com.selectiverendering.SelectiveRenderingManager;
@@ -32,22 +32,25 @@ public class LevelRendererMixin {
 	@Unique
 	private static boolean selectiveRendering$gizmosDrained = true;
 
-	@Inject(method = "collectPerFrameRenderThreadGizmos", at = @At("TAIL"), require = 0)
+	//? if >=26.2 {
+	@Inject(method = "collectPerFrameRenderThreadGizmos", at = @At("TAIL"))
 	private void selectiveRendering$emitRegionGizmo(CallbackInfoReturnable<Gizmos.TemporaryCollection> cir) {
 		emit();
 	}
-
-	@Inject(method = "collectPerFrameGizmos", at = @At("TAIL"), require = 0)
-	private void selectiveRendering$emitRegionGizmoLegacy(CallbackInfoReturnable<Gizmos.TemporaryCollection> cir) {
+	//?} else {
+	/*@Inject(method = "collectPerFrameGizmos", at = @At("TAIL"))
+	private void selectiveRendering$emitRegionGizmo(CallbackInfoReturnable<Gizmos.TemporaryCollection> cir) {
 		emit();
 	}
+	*///?}
 
 	@Inject(method = "finalizeGizmoCollection", at = @At("TAIL"), require = 0)
 	private void selectiveRendering$markGizmosDrained(CallbackInfo ci) {
 		selectiveRendering$gizmosDrained = true;
 	}
 
-	private static void emit() {
+	@Unique
+    private static void emit() {
 		if (!selectiveRendering$gizmosDrained) {
 			return;
 		}
@@ -57,7 +60,9 @@ public class LevelRendererMixin {
 		}
 
 		for (Region added : SelectiveRenderingManager.regions()) {
-			Gizmos.cuboid(added.box(), GizmoStyle.strokeAndFill(ADDED_STROKE, STROKE_WIDTH, ADDED_FILL));
+			Gizmos.cuboid(added.box(), GizmoStyle.fill(ADDED_FILL));
+			var gizmoProp = Gizmos.cuboid(added.box(), GizmoStyle.stroke(ADDED_STROKE, STROKE_WIDTH));
+			gizmoProp.setAlwaysOnTop();
 		}
 
 		BlockPos first = RegionEditor.getCorner(0);
@@ -66,7 +71,7 @@ public class LevelRendererMixin {
 		if (first != null && second != null) {
 			AABB box = RegionEditor.regionBox();
 			if (box != null) {
-				Gizmos.cuboid(box, GizmoStyle.stroke(SELECTION_STROKE, STROKE_WIDTH)).setAlwaysOnTop();
+				Gizmos.cuboid(box, GizmoStyle.stroke(SELECTION_STROKE, STROKE_WIDTH));
 			}
 		}
 
@@ -76,7 +81,8 @@ public class LevelRendererMixin {
 		selectiveRendering$gizmosDrained = false;
 	}
 
-	private static void corner(int index, BlockPos pos) {
+	@Unique
+    private static void corner(int index, BlockPos pos) {
 		if (pos == null) {
 			return;
 		}
@@ -86,10 +92,10 @@ public class LevelRendererMixin {
 
 		if (RegionEditor.isCornerSelected(index)) {
 			int fill = first ? CORNER_1_FILL : CORNER_2_FILL;
-			Gizmos.cuboid(pos, GizmoStyle.strokeAndFill(stroke, STROKE_WIDTH, fill));
+			Gizmos.cuboid(pos, GizmoStyle.strokeAndFill(stroke, STROKE_WIDTH, fill)).setAlwaysOnTop();
 			return;
 		}
 
-		Gizmos.cuboid(pos, GizmoStyle.stroke(stroke, STROKE_WIDTH));
+		Gizmos.cuboid(pos, GizmoStyle.stroke(stroke, STROKE_WIDTH)).setAlwaysOnTop();
 	}
 }

@@ -77,11 +77,11 @@ public final class Alpha {
 		boolean needsRegion = mode.usesRegion();
 		boolean needsList = mode.usesList();
 
-		List<Region> regions = needsRegion ? current.regions() : List.of();
+		List<Region> regions = needsRegion ? current.blockRegions() : List.of();
 		List<BlockMatchRule> rules = needsList ? current.rules() : List.of();
 
 		// 空名单或空选区不参与反转，避免意外淡化整个世界。
-		if ((needsRegion && regions.isEmpty()) || (needsList && rules.isEmpty())) {
+		if ((needsRegion && regions.isEmpty()) || (needsList && rules.isEmpty() && !(needsRegion && current.hasLocalRules()))) {
 			return -1;
 		}
 
@@ -128,6 +128,10 @@ public final class Alpha {
 		boolean inside = false;
 		if (needsRegion) {
 			inside = insideRegion(pos, regions, current.union(), cache);
+
+			if (inside && needsList && !listed && current.hasLocalRules()) {
+				listed = listedLocally(state, pos, carried, regions);
+			}
 		}
 
 		boolean matched = switch (mode) {
@@ -280,6 +284,16 @@ public final class Alpha {
 	private static boolean matches(BlockState state, boolean moving, List<BlockMatchRule> rules) {
 		for (BlockMatchRule rule : rules) {
 			if (rule.matches(state, moving)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static boolean listedLocally(BlockState state, BlockPos pos, boolean moving, List<Region> regions) {
+		for (Region added : regions) {
+			if (!added.options().rules().isEmpty() && added.contains(pos) && matches(state, moving, added.options().rules())) {
 				return true;
 			}
 		}

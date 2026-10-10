@@ -7,8 +7,30 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 轴对齐的整数方块选区，包含 min 和 max 两端。 */
-public record Region(BlockPos min, BlockPos max) {
+/** 轴对齐的整数方块选区，包含 min 和 max 两端。相等性只看几何范围，不含 options。 */
+public record Region(BlockPos min, BlockPos max, RegionOptions options) {
+	public Region {
+		options = options == null ? RegionOptions.DEFAULT : options;
+	}
+
+	public Region(BlockPos min, BlockPos max) {
+		this(min, max, RegionOptions.DEFAULT);
+	}
+
+	public Region withOptions(RegionOptions value) {
+		return new Region(min, max, value);
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		return other instanceof Region region && min.equals(region.min) && max.equals(region.max);
+	}
+
+	@Override
+	public int hashCode() {
+		return 31 * min.hashCode() + max.hashCode();
+	}
+
 	public static Region of(BlockPos first, BlockPos second) {
 		return new Region(
 			new BlockPos(
@@ -43,33 +65,33 @@ public record Region(BlockPos min, BlockPos max) {
 		BlockPos high = overlap.max();
 
 		if (min.getX() < low.getX()) {
-			parts.add(new Region(min, new BlockPos(low.getX() - 1, max.getY(), max.getZ())));
+			parts.add(new Region(min, new BlockPos(low.getX() - 1, max.getY(), max.getZ()), options));
 		}
 
 		if (max.getX() > high.getX()) {
-			parts.add(new Region(new BlockPos(high.getX() + 1, min.getY(), min.getZ()), max));
+			parts.add(new Region(new BlockPos(high.getX() + 1, min.getY(), min.getZ()), max, options));
 		}
 
 		int x1 = Math.max(min.getX(), low.getX());
 		int x2 = Math.min(max.getX(), high.getX());
 
 		if (min.getY() < low.getY()) {
-			parts.add(new Region(new BlockPos(x1, min.getY(), min.getZ()), new BlockPos(x2, low.getY() - 1, max.getZ())));
+			parts.add(new Region(new BlockPos(x1, min.getY(), min.getZ()), new BlockPos(x2, low.getY() - 1, max.getZ()), options));
 		}
 
 		if (max.getY() > high.getY()) {
-			parts.add(new Region(new BlockPos(x1, high.getY() + 1, min.getZ()), new BlockPos(x2, max.getY(), max.getZ())));
+			parts.add(new Region(new BlockPos(x1, high.getY() + 1, min.getZ()), new BlockPos(x2, max.getY(), max.getZ()), options));
 		}
 
 		int y1 = Math.max(min.getY(), low.getY());
 		int y2 = Math.min(max.getY(), high.getY());
 
 		if (min.getZ() < low.getZ()) {
-			parts.add(new Region(new BlockPos(x1, y1, min.getZ()), new BlockPos(x2, y2, low.getZ() - 1)));
+			parts.add(new Region(new BlockPos(x1, y1, min.getZ()), new BlockPos(x2, y2, low.getZ() - 1), options));
 		}
 
 		if (max.getZ() > high.getZ()) {
-			parts.add(new Region(new BlockPos(x1, y1, high.getZ() + 1), new BlockPos(x2, y2, max.getZ())));
+			parts.add(new Region(new BlockPos(x1, y1, high.getZ() + 1), new BlockPos(x2, y2, max.getZ()), options));
 		}
 
 		return parts;

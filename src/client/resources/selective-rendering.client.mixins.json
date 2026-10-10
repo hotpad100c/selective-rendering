@@ -33,7 +33,7 @@
 		"lighting.SkyLightEngineMixin",
 		"recording.ClientLevelMixin",
 		"region.GuiMixin",
-		"region.LevelRendererMixin",
+		"LevelRendererMixin",
 		"region.MouseHandlerMixin",
 		"render.FluidModelMixin",
 		"render.FluidRendererMixin",
