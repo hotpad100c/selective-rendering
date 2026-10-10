@@ -1,6 +1,8 @@
 package com.selectiverendering;
 
+import com.selectiverendering.config.ModConfig;
 import com.selectiverendering.config.ModConfigScreen;
+import com.selectiverendering.util.Log;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
@@ -56,30 +58,9 @@ public class SelectiveRendering implements ClientModInitializer {
 		SelectiveRenderingManager.load();
 
 		ModConfigScreen.register();
-		reportClipHook();
 		registerMouseClaim();
 	}
 
-	/**
-	 * 向 OrbitCam 注册"鼠标认领"：手持魔杖期间，整只鼠标都归魔杖。
-	 *
-	 * <h2>为什么需要它</h2>
-	 * <p>{@code ci.cancel()} 只能让行<b>事件</b>，让行不了<b>状态</b>。
-	 * 左 Alt 同时是我们的"方块键"和 OrbitCam 的相机修饰键，
-	 * 即使我们把按键事件吃掉了，Alt 被按住这件事仍会被它每帧读成"进入相机模式"，
-	 * 于是指针变成箭头、拖动仍然转视角。
-	 *
-	 * <p>OrbitCam 因此提供了一个认领接口：认领期间强制 {@code cameraMode = false}，
-	 * 指针/旋转/平移/滚轮一并交出来。语义就是我们那句"手持魔杖是更特殊的状态"的完整版。
-	 *
-	 * <h2>为什么用反射</h2>
-	 * <p>两个 mod 独立发布，不能互相硬依赖。OrbitCam 的这个方法签名用的是 JDK
-	 * 自带的 {@code BooleanSupplier}，所以反射接入不需要碰它的任何类型，
-	 * 它不在或签名变了都只是"退化成今天的行为"，不会影响本 Mod 启动。
-	 *
-	 * <p>认领的结果会打进日志——这个项目的 mixin 失败是静默的，
-	 * 能不打进日志就看不出来的地方都打一条。
-	 */
 	private static void registerMouseClaim() {
 		if (!FabricLoader.getInstance().isModLoaded(ORBITCAM_ID)) {
 			return;
@@ -89,7 +70,7 @@ public class SelectiveRendering implements ClientModInitializer {
 			Class.forName("com.example.orbitcam.client.OrbitCam")
 				.getMethod("setMouseClaimProvider", BooleanSupplier.class)
 				.invoke(null, (BooleanSupplier) SelectiveRendering::isWandHeld);
-
+			//这是啥玩意啊怎么在这里，怎么还是com.example开头的？？？
 			Log.say("[state] orbitcam mouse claim registered");
 		}
 		catch (Throwable t) {

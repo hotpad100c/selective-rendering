@@ -1,6 +1,5 @@
 package com.selectiverendering.config;
 
-import com.selectiverendering.Preset;
 import com.selectiverendering.SelectiveRenderingManager;
 
 import fi.dy.masa.malilib.util.StringUtils;

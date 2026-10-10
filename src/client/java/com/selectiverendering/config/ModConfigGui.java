@@ -5,7 +5,6 @@ import java.util.List;
 
 import net.minecraft.client.gui.screens.Screen;
 
-import com.selectiverendering.Preset;
 import com.selectiverendering.SelectiveRendering;
 import com.selectiverendering.SelectiveRenderingManager;
 

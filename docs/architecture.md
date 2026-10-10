@@ -1,65 +1,102 @@
 # 架构说明
 
-面向要改代码的人。看完这篇应该能回答："我要改的这个行为，落在哪个文件、要不要改三份"。
+面向要改代码的人。看完这篇应该能回答："我要改的这个行为，落在哪个文件、哪些注入点要各写一遍"。
 
 ---
 
 ## 一、源码布局
 
-项目是**多版本**结构：
+项目用 Stonecutter 管多版本：**只有一份源码 `src/`**，版本差异用 `//? if` 条件解决
+（机制与命令见 `docs/development.md` 第一节）。
 
 ```
-src/                        共享源码（所有 MC 版本共用）
+src/
 └── client/java/com/selectiverendering/
     ├── SelectiveRendering.java          入口
-    ├── SelectiveRenderingManager.java   ★ 全局状态 + getAlpha() 核心判定
-    ├── WandHud.java                     手持魔杖时的 HUD（正文，由各版本 GuiMixin 转发调用）
-    ├── BlockMatchRule.java              规则字符串的解析与匹配
-    ├── Region.java                      选区几何（含 subtract 挖洞）
-    ├── RegionMerger.java                散点坐标 → 长方体（贪心合并）
-    ├── Preset.java / ModConfig.java     预设 / 磁盘配置
-    ├── HiddenSections.java              "哪些 section 含隐藏方块"的记账本
-    ├── HiddenRenderTypes.java           本帧需要套 alpha 的 RenderType 标记
-    ├── TranslucentRenderTypes.java      为一个 RenderType 找半透明变体
-    ├── BufferSourceHooks.java           取 VertexConsumer 时的挂钩
-    ├── MovingBlockRenderContext.java    活塞移动中渲染的线程上下文
-    ├── BlockChangeRecorder.java         变化记录器
-    ├── BlockListMessage.java            屏幕下方的浮动提示
-    ├── ModTranslations.java             自带翻译（劫持 ClientLanguage）
-    ├── FadedBlockGetter.java            ★ 客户端射线专用：把淡化方块说成空气的 BlockGetter 外壳
-    ├── CameraRay.java                   ★ 魔杖射线：从渲染相机出发、穿过鼠标指针
-    ├── mixin/                           原版渲染管线补丁
-    │   ├── ModelBlockRendererMixin      ★ 方块：取消 / 面剔除 / alpha / 换材质
-    │   ├── LevelRendererMixin           选区线框（双注入点，兼容方法改名）
-    │   ├── FluidRendererMixin           流体：alpha / 面剔除
-    │   ├── FluidModelMixin              流体整体挪到半透明层
-    │   ├── SectionCompilerMixin         可见性图不再把隐藏方块当不透明
-    │   ├── LightEngineMixin             光照引擎把隐藏方块当空气
-    │   ├── BlockModelLighterMixin       平滑光照(AO)把隐藏方块当空气
-    │   ├── BlockEntityRenderDispatcherMixin  方块实体淡化
-    │   ├── MouseHandlerMixin            ★ 魔杖的全部鼠标交互
-    │   ├── ClientLevelClipMixin         ★ 客户端射线：淡化方块当空气（见第六节）
-    │   ├── ClientLevelMixin             给记录器喂方块变化
-    │   ├── ClientLanguageMixin          翻译劫持（按 selective_rendering. 前缀过滤）
-    │   ├── compat/                      Fabric Renderer API (Indigo) 补丁
-    │   └── sodium/                      Sodium 补丁（含 LightDataAccessMixin）
-    └── config/                          MaLiLib 配置界面与接线
-
-versions/<mc版本>/           只放该版本独有的适配代码
-└── src/client/java/com/selectiverendering/
-    ├── compat/Platform.java             ★ 跨版本适配层（鼠标键码、重建入口、…）
-    ├── AlphaVertexConsumer.java         强制覆盖顶点 alpha 的装饰器
-    ├── SelectiveSubmitNodeCollector.java  方块实体淡化的提交包装器
-    └── mixin/                           HUD / 移动方块 / 取 buffer 入口 等
+    ├── SelectiveRenderingManager.java   ★ 状态中心：全部可变状态 + 设置项 + 快照发布 + 落盘
+    ├── RenderConfig.java                不可变快照（渲染线程只读它）
+    ├── render/                          方块 / 区块渲染的判定与调度
+    │   ├── Alpha.java                   ★ 判定层：getAlpha()/alphaNow()…"这个方块淡不淡"
+    │   ├── RebuildScheduler.java        改完之后重烘焙哪些 section（三档）
+    │   ├── HiddenSections.java          "哪些 section 含隐藏方块"的记账本
+    │   ├── MovingBlockRenderContext.java 活塞移动中渲染的线程上下文
+    │   └── BlockRenderContextAccess.java Sodium 方块上下文里挂的 alpha 字段
+    ├── blockentity/                     方块实体 / feature 渲染淡化
+    │   ├── TranslucentSubmitForwarder.java   ★ 换半透明 RenderType 的提交转发（方法清单唯一一份）
+    │   ├── SelectiveSubmitNodeCollector.java 方块实体淡化入口（继承上面那个）
+    │   ├── AlphaVertexConsumer.java     给顶点乘 alpha 的 VertexConsumer 包装
+    │   ├── BufferSourceHooks.java       取 VertexConsumer 时的挂钩
+    │   ├── HiddenRenderTypes.java       本帧需要套 alpha 的 RenderType 标记
+    │   └── TranslucentRenderTypes.java  为一个 RenderType 找半透明变体
+    ├── lighting/
+    │   └── LightSuppression.java        ★ 光照：伪装(airIfHidden) + 标记 + 分批重算
+    ├── region/                          选区与魔杖
+    │   ├── Region.java                  选区几何（含 subtract 挖洞）
+    │   ├── RegionEditor.java            魔杖双角点 + 选区的增/删/裁/点选
+    │   ├── RegionMerger.java            散点坐标 → 长方体（贪心合并）
+    │   ├── CameraRay.java               ★ 魔杖射线：从渲染相机出发、穿过鼠标指针
+    │   └── WandHud.java                 手持魔杖时的 HUD（由 GuiMixin 转发调用）
+    ├── matchingrule/                    方块名单规则
+    │   ├── BlockMatchRule.java          规则字符串的解析与匹配
+    │   └── BlockListMessage.java        增删规则时屏幕下方的浮动提示
+    ├── interaction/
+    │   └── FadedBlockGetter.java        ★ 客户端射线专用：把淡化方块说成空气的 BlockGetter 外壳
+    ├── recording/
+    │   └── BlockChangeRecorder.java     变化记录器
+    ├── config/                          配置：磁盘配置、预设、热键、翻译、MaLiLib 界面与接线
+    │   ├── ModConfig.java / Preset.java 磁盘配置 / 预设
+    │   ├── ModHotkeys.java              修饰键查询
+    │   ├── ModTranslations.java         自带翻译（劫持 ClientLanguage）
+    │   └── ModConfigs.java 等           MaLiLib 配置界面
+    ├── compat/Platform.java             ★ 跨版本适配层
+    ├── util/                            Log、BlockPosScratch
+    └── mixin/                           补丁，按功能分包，与上面的包一一对应
+        ├── render/
+        │   ├── ModelBlockRendererMixin  ★ 方块：取消 / 面剔除 / alpha / 换材质
+        │   ├── SectionCompilerMixin     可见性图不再把隐藏方块当不透明
+        │   ├── FluidRendererMixin       流体：alpha / 面剔除
+        │   └── FluidModelMixin          流体整体挪到半透明层
+        ├── blockentity/
+        │   ├── BlockEntityRenderDispatcherMixin  方块实体淡化
+        │   ├── BlockFeatureRendererMixin 活塞移动中的方块
+        │   ├── SubmitNodeCollectionMixin 移动方块进半透明相位
+        │   ├── FeatureRenderDispatcherMixin 每帧清 HiddenRenderTypes 标记
+        │   ├── RenderTypeFeatureRendererMixin / BufferSourceMixin  取 VertexConsumer 的入口（按版本）
+        │   └── RenderTypeAccessor / RenderSetupAccessor / TextureBindingAccessor
+        ├── lighting/
+        │   ├── LightEngineMixin         光照引擎把隐藏方块当空气（→ LightSuppression）
+        │   ├── AreaLightPacketMixin     服务端光照到达时标记区块（→ LightSuppression.markChunk）
+        │   ├── AreaLightFlushMixin      runLightUpdates 之后消化待重算区块（→ LightSuppression.flush）
+        │   ├── BlockModelLighterMixin   平滑光照(AO)把隐藏方块当空气
+        │   └── LightmapRenderStateExtractorMixin
+        ├── region/
+        │   ├── MouseHandlerMixin        ★ 魔杖的全部鼠标交互
+        │   ├── LevelRendererMixin       选区线框（双注入点，兼容方法改名）
+        │   └── GuiMixin                 HUD 注入点（→ WandHud）
+        ├── interaction/ClientLevelClipMixin  ★ 客户端射线：淡化方块当空气（见第六节）
+        ├── recording/ClientLevelMixin   给记录器喂方块变化
+        ├── config/ClientLanguageMixin   翻译劫持（按 selective_rendering. 前缀过滤）
+        ├── compat/                      第三方 Mod 补丁：Fabric Renderer API (Indigo)、EntityCulling、ImmediatelyFast
+        └── sodium/                      Sodium 补丁（含 LightDataAccessMixin）
 ```
 
-> 各版本的 `src/client/resources/selective-rendering.client.mixins.json`
-> **要列出该版本生效的全部 mixin**（共享的 + 本版本独有的）。
-> 所以把一个 mixin 从 `versions/` 上移到 `src/` 时，json **不需要改**。
+按版本取舍的文件（内部用 `//? if` 区分，没有"另存一份"）：
+
+| 文件 | 为什么随版本变 |
+|---|---|
+| `compat/Platform.java` | ★ 跨版本适配层：鼠标键码、重建入口、GUI 访问、按键名、`MaterialInfo` 构造参数 |
+| `blockentity/AlphaVertexConsumer.java` | 实现 `VertexConsumer`，接口成员随版本增删 |
+| `blockentity/TranslucentSubmitForwarder.java` | 实现 `OrderedSubmitNodeCollector`，方法集随版本变；**唯一一份**方法清单（换半透明 RenderType 的那几个也在这里） |
+| `blockentity/SelectiveSubmitNodeCollector.java` | 方块实体淡化的入口，继承上面那个类，只管 `target()` / `order(n)` |
+| `mixin/blockentity/BlockFeatureRendererMixin` 等 | 注入目标类 / 方法随版本变 |
+
+> `src/client/resources/selective-rendering.client.mixins.json` **只有一份**；
+> 只在部分版本存在的 mixin（`blockentity.BufferSourceMixin`、`compat.ImmediatelyFastBufferSourceMixin`、
+> `blockentity.RenderTypeFeatureRendererMixin`）在 json 里用同样的 `//? if` 条件包住。
 
 ---
 
-## 二、核心判定 `getAlpha(state, pos, moving)`
+## 二、核心判定 `Alpha.getAlpha(state, pos, moving)`
 
 全 Mod 只有这一个"真理来源"，返回：
 
@@ -77,6 +114,19 @@ versions/<mc版本>/           只放该版本独有的适配代码
   只有真正参与画面渲染的路径用它。
 - **`alphaNow(...)`**：只判定、不记账。光照 / AO 用它在光照线程上以百万次量级调用，
   不该有副作用。对外入口是 `airIfHidden(state, pos)`。
+
+### 光照是怎么跟着隐藏集合走的
+
+```
+隐藏集合变了 ─► LightSuppression.relight()  ─┐
+(切模式/增删裁选区)                            ├─► PENDING 区块集合 ─► flush()：每帧限额 checkBlock
+服务端光照包到达 ─► markChunk()  ────────────┘     ▲
+                                  AreaLightFlushMixin 挂在 runLightUpdates RETURN
+```
+
+- 伪装：`LightSuppression.airIfHidden` 被光照引擎 / 三套 AO 的 mixin 调用；
+- 服务端发来的光照是按"方块真实存在"算的，会覆盖客户端的伪装，所以到达后要补算；
+- 只对 **选区（外扩 1 格）所在的列** 发 `checkBlock`，扩散交给引擎，不再整块外扩 15 格暴力扫。
 
 ### 修改状态的标准姿势
 
@@ -113,23 +163,24 @@ synchronized (LOCK) {
 
 ## 四、跨版本适配的边界
 
-### 必须留在 `versions/` 的
+### 随版本变的文件（用 `//? if` 取舍）
 
-| 文件                                                                                                                   | 原因                                                                                                                                                                                                                  |
-| ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compat/Platform.java`                                                                                                 | **每个方法在三个版本里都不一样**：鼠标键码 `0/1` vs `1/3`、`levelRenderer` vs `levelExtractor`、`minecraft.screen` vs `minecraft.gui.screen()`、`KEYSYM` vs `KEYBOARD`、`MaterialInfo` 构造参数个数。这就是它的职责。 |
-| `AlphaVertexConsumer.java`                                                                                             | 实现 `VertexConsumer` 接口，接口成员随版本增删（26.3 多一个 `setUv3`）。                                                                                                                                              |
-| `SelectiveSubmitNodeCollector.java`                                                                                    | 实现 `SubmitNodeCollector` 接口，方法集随版本变（三份分别 8.4 / 9.0 / 10.3 KB）。                                                                                                                                     |
-| `mixin/BlockFeatureRendererMixin.java`                                                                                 | 26.1.2 打 `BlockFeatureRenderer.renderMovingBlockSubmits`；26.2+ 打 `MovingBlockFeatureRenderer.buildGroup`。目标类和注入策略都不是一回事。                                                                           |
-| `mixin/RenderTypeFeatureRendererMixin`<br>`mixin/BufferSourceMixin`<br>`mixin/compat/ImmediatelyFastBufferSourceMixin` | 三个"取 VertexConsumer"的入口各自依赖**只在部分版本存在**的类：`MultiBufferSource` 26.3 已删除；`RenderTypeFeatureRenderer` 26.2+ 才有。共享源码无法引用。                                                            |
-| `mixin/FeatureRenderDispatcherMixin`                                                                                   | 差异不只是方法名，**返回类型也不同**：26.1.2 `endFrame` 返回 `void`，26.2+ `prepareFrame` 返回 `PreparedFrame`（26.1.2 里没有这个类）。                                                                               |
+| 文件 | 原因 |
+| --- | --- |
+| `compat/Platform.java` | **每个方法在三个版本里都不一样**：鼠标键码 `0/1` vs `1/3`、`levelRenderer` vs `levelExtractor`、`minecraft.screen` vs `minecraft.gui.screen()`、`KEYSYM` vs `KEYBOARD`、`MaterialInfo` 构造参数个数。这就是它的职责。 |
+| `blockentity/AlphaVertexConsumer.java` | 实现 `VertexConsumer` 接口，接口成员随版本增删（26.3 多一个 `setUv3`）。 |
+| `blockentity/TranslucentSubmitForwarder.java` | 实现 `OrderedSubmitNodeCollector` 接口，方法集随版本变；`SelectiveSubmitNodeCollector` 继承它。 |
+| `mixin/blockentity/BlockFeatureRendererMixin.java` | 26.1.2 打 `BlockFeatureRenderer.renderMovingBlockSubmits`；26.2+ 打 `MovingBlockFeatureRenderer.buildGroup`。目标类和注入策略都不是一回事。 |
+| `mixin/blockentity/RenderTypeFeatureRendererMixin`<br>`mixin/blockentity/BufferSourceMixin`<br>`mixin/compat/ImmediatelyFastBufferSourceMixin` | 三个"取 VertexConsumer"的入口各自依赖**只在部分版本存在**的类：`MultiBufferSource` 26.3 已删除；`RenderTypeFeatureRenderer` 26.2+ 才有。整文件包进条件里，不满足的版本是空文件。 |
+| `mixin/blockentity/FeatureRenderDispatcherMixin` | 差异不只是方法名，**返回类型也不同**：26.1.2 `endFrame` 返回 `void`，26.2+ `prepareFrame` 返回 `PreparedFrame`（26.1.2 里没有这个类）。 |
+| `mixin/region/GuiMixin` | 26.1.2 打 `Gui`，26.2+ 打 `Hud`（26.1.2 里没有这个类）；正文在共享的 `WandHud`。 |
 
 ### 已经在共享里的"跨版本"技巧
 
 - **`LevelRendererMixin`**：方法改名过（`collectPerFrameGizmos` → `collectPerFrameRenderThreadGizmos`），
   参数签名相同，于是写两个 `require = 0` 的 `@Inject` 委托给同一个 `emit()`。
-- **`WandHud`**：HUD 正文三份逐字相同，但 mixin 目标类不同（26.1.2 是 `Gui`，26.2+ 是 `Hud`，
-  且 26.1.2 里根本没有 `Hud`）。正文抽到共享类，各版本 mixin 只剩转发。
+- **`WandHud`**：HUD 正文各版本相同，只有 mixin 目标类不同（26.1.2 是 `Gui`，26.2+ 是 `Hud`）。
+  正文抽到共享类，`GuiMixin` 只剩转发和一个按版本切换的 `@Mixin` 目标。
 - **可选依赖的 mixin**（Sodium / Indigo / ImmediatelyFast）统一用
   `require = 0` + `remap = false` + 字符串 `targets`，缺席时静默跳过。
 

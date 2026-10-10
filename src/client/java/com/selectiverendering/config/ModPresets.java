@@ -3,7 +3,6 @@ package com.selectiverendering.config;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.selectiverendering.Preset;
 import com.selectiverendering.SelectiveRenderingManager;
 
 /**

@@ -2,13 +2,12 @@ package com.selectiverendering.config;
 
 import com.google.common.collect.ImmutableList;
 import com.google.gson.JsonObject;
-import com.selectiverendering.BlockChangeRecorder;
-import com.selectiverendering.ModConfig;
 import com.selectiverendering.SelectiveRendering;
-import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.SelectiveRenderingManager.Mode;
 import com.selectiverendering.SelectiveRenderingManager.RecordApplyMode;
 import com.selectiverendering.SelectiveRenderingManager.RecordMode;
+import com.selectiverendering.SelectiveRenderingManager;
+import com.selectiverendering.recording.BlockChangeRecorder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;

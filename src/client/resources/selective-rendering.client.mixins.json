@@ -1,0 +1,45 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "com.selectiverendering.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"blockentity.BlockEntityRenderDispatcherMixin",
+		"blockentity.BlockFeatureRendererMixin",
+		"blockentity.FeatureRenderDispatcherMixin",
+		"blockentity.RenderSetupAccessor",
+		"blockentity.RenderTypeAccessor",
+		"blockentity.RenderTypeFeatureRendererMixin",
+		"blockentity.SubmitNodeCollectionMixin",
+		"blockentity.TextureBindingAccessor",
+		"compat.entityCulling.EntityCullingProviderMixin",
+		"compat.indigo.FabricRendererApiBlockRendererMixin",
+		"compat.indigo.FabricRendererApiLightMixin",
+		"compat.indigo.FabricRendererApiMovingBlockMixin",
+		"compat.sodium.AbstractBlockRenderContextMixin",
+		"compat.sodium.BlockRendererMixin",
+		"compat.sodium.ChunkBuilderMeshingTaskMixin",
+		"compat.sodium.DefaultFluidRendererMixin",
+		"compat.sodium.LightDataAccessMixin",
+		"config.ClientLanguageMixin",
+		"interaction.ClientLevelClipMixin",
+		"lighting.AreaLightFlushMixin",
+		"lighting.AreaLightPacketMixin",
+		"lighting.BlockModelLighterMixin",
+		"lighting.LightEngineMixin",
+		"lighting.LightmapRenderStateExtractorMixin",
+		"recording.ClientLevelMixin",
+		"region.GuiMixin",
+		"region.LevelRendererMixin",
+		"region.MouseHandlerMixin",
+		"render.FluidModelMixin",
+		"render.FluidRendererMixin",
+		"render.ModelBlockRendererMixin",
+		"render.SectionCompilerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 0
+	},
+	"mixins": [
+	]
+}

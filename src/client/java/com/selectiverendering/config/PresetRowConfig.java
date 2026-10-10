@@ -2,7 +2,6 @@ package com.selectiverendering.config;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
-import com.selectiverendering.Preset;
 import com.selectiverendering.SelectiveRenderingManager;
 
 import fi.dy.masa.malilib.config.ConfigType;
