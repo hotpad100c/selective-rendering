@@ -85,6 +85,5 @@
   "selective_rendering.config.comment.region_rules": "仅对这个选区生效的方块，与全局列表取并集",
   "selective_rendering.config.region_blocks": "方块",
   "selective_rendering.config.region_entities": "实体",
-  "selective_rendering.config.region_particles": "粒子",
-  "selective_rendering.config.region_unavailable": "暂未实现"
+  "selective_rendering.config.region_particles": "粒子"
 }

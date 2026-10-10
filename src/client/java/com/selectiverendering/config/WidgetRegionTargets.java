@@ -31,12 +31,12 @@ public final class WidgetRegionTargets extends WidgetConfigOption {
 
 		RegionHandle handle = targets.handle();
 
-		x = this.addToggle(x, y, "region_blocks", null, handle, options -> options.blocks(), RegionOptions::withBlocks);
-		x = this.addToggle(x, y, "region_entities", "region_unavailable", handle, options -> options.entities(), RegionOptions::withEntities);
-		this.addToggle(x, y, "region_particles", "region_unavailable", handle, options -> options.particles(), RegionOptions::withParticles);
+		x = this.addToggle(x, y, "region_blocks", handle, RegionOptions::blocks, RegionOptions::withBlocks);
+		x = this.addToggle(x, y, "region_entities", handle, RegionOptions::entities, RegionOptions::withEntities);
+		this.addToggle(x, y, "region_particles", handle, RegionOptions::particles, RegionOptions::withParticles);
 	}
 
-	private int addToggle(int x, int y, String key, String tipKey, RegionHandle handle,
+	private int addToggle(int x, int y, String key, RegionHandle handle,
 			Function<RegionOptions, Boolean> read, BiFunction<RegionOptions, Boolean, RegionOptions> write) {
 		String text = ModConfigs.text(key);
 		int textWidth = this.getStringWidth(text);
@@ -44,9 +44,7 @@ public final class WidgetRegionTargets extends WidgetConfigOption {
 		this.addLabel(x, y + 6, textWidth, 8, 0xFFFFFFFF, text);
 
 		int boxX = x + textWidth + LABEL_GAP;
-		ButtonGeneric box = tipKey == null
-			? new ButtonGeneric(boxX, y, BOX, BOX, mark(read.apply(handle.region().options())))
-			: new ButtonGeneric(boxX, y, BOX, BOX, mark(read.apply(handle.region().options())), ModConfigs.text(tipKey));
+		ButtonGeneric box = new ButtonGeneric(boxX, y, BOX, BOX, mark(read.apply(handle.region().options())));
 
 		this.addButton(box, (button, mouseButton) -> {
 			boolean next = !read.apply(handle.region().options());

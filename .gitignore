@@ -40,3 +40,4 @@ replay_*.log
 *.jfr
 /AGENTS.md
 /CLAUDE.md
+/.allomos/

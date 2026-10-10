@@ -232,7 +232,9 @@ synchronized (LOCK) {
 
 - 方块判定只用 `blocks` 为真的选区（`RenderConfig.blockRegions`）；本地名单与全局名单取并集，
   只在选区内部且模式用到名单时生效（`Alpha.listedLocally`）。
-- `entities` / `particles` 目前只存盘和显示，没有实际效果。
+- 实体：`mixin/entity/EntityRenderDispatcherMixin` 包装 `submit`，位置命中则完全隐藏（透明度 0）或套上 `SelectiveSubmitNodeCollector`（与方块实体同一条半透明管线）。
+  粒子：`mixin/particle/ParticleEngineMixin` 在 `add` 处按生成位置丢弃，不是半透明（和 Lucidity 一致，已存在的粒子不受影响）。
+  两者的命中规则在 `render/RegionTargets`：只看区域类模式（选区内 / 选区外，含 LISTED 变体但不用方块名单，反转同样生效），黑 / 白名单模式不影响它们。
 - 预设里的选区仍是纯范围字符串，应用预设会恢复默认开关。
 
 配置项本身只是"视图"，权威数据源永远是 `SelectiveRenderingManager`；

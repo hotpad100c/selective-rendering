@@ -256,7 +256,11 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
+		boolean blocksChanged = !old.min().equals(updated.min()) || !old.max().equals(updated.max())
+			|| old.options().blocks() != updated.options().blocks()
+			|| !old.options().rules().equals(updated.options().rules());
+
+		if (blocksChanged && SelectiveRenderingManager.getMode().usesRegion()) {
 			HiddenSections.mark(old.box());
 			HiddenSections.mark(updated.box());
 

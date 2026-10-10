@@ -85,6 +85,5 @@
   "selective_rendering.config.comment.region_rules": "Extra blocks for this selection only; combined with the global list",
   "selective_rendering.config.region_blocks": "Blocks",
   "selective_rendering.config.region_entities": "Entities",
-  "selective_rendering.config.region_particles": "Particles",
-  "selective_rendering.config.region_unavailable": "Not available yet"
+  "selective_rendering.config.region_particles": "Particles"
 }

@@ -32,6 +32,8 @@ public final class RenderConfig {
 
 	private final int alpha;
 	private final List<Region> blockRegions;
+	private final List<Region> entityRegions;
+	private final List<Region> particleRegions;
 	private final Region union;
 	private final boolean hasLocalRules;
 
@@ -54,6 +56,8 @@ public final class RenderConfig {
 
 		this.alpha = Math.round(255F * (SelectiveRenderingManager.MAX_TRANSPARENCY - transparency) / SelectiveRenderingManager.MAX_TRANSPARENCY);
 		this.blockRegions = regions.stream().filter(added -> added.options().blocks()).toList();
+		this.entityRegions = regions.stream().filter(added -> added.options().entities()).toList();
+		this.particleRegions = regions.stream().filter(added -> added.options().particles()).toList();
 		this.union = unionOf(blockRegions);
 		this.hasLocalRules = blockRegions.stream().anyMatch(added -> !added.options().rules().isEmpty());
 	}
@@ -129,6 +133,14 @@ public final class RenderConfig {
 	/** 参与方块判定的选区。 */
 	public List<Region> blockRegions() {
 		return blockRegions;
+	}
+
+	public List<Region> entityRegions() {
+		return entityRegions;
+	}
+
+	public List<Region> particleRegions() {
+		return particleRegions;
 	}
 
 	/** {@link #blockRegions()} 的包围盒；没有时为 null。 */

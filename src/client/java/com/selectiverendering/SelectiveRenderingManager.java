@@ -793,6 +793,7 @@ public final class SelectiveRenderingManager {
 		config.invert = invert;
 		config.wand = wand;
 		config.fullBright = fullBright;
+		config.passThrough = passThrough;
 		config.rules = RULES.stream().map(BlockMatchRule::source).toList();
 		config.recorded = RECORDED.stream().map(BlockMatchRule::source).toList();
 		config.regionPos1 = toArray(corner1);
