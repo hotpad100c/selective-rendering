@@ -43,10 +43,9 @@ src/
     │   └── FadedBlockGetter.java        ★ 客户端射线专用：把淡化方块说成空气的 BlockGetter 外壳
     ├── recording/
     │   └── BlockChangeRecorder.java     变化记录器
-    ├── config/                          配置：磁盘配置、预设、热键、翻译、MaLiLib 界面与接线
+    ├── config/                          配置：磁盘配置、预设、热键、MaLiLib 界面与接线
     │   ├── ModConfig.java / Preset.java 磁盘配置 / 预设
     │   ├── ModHotkeys.java              修饰键查询
-    │   ├── ModTranslations.java         自带翻译（劫持 ClientLanguage）
     │   └── ModConfigs.java 等           MaLiLib 配置界面
     ├── compat/Platform.java             ★ 跨版本适配层
     ├── util/                            Log、BlockPosScratch
@@ -75,9 +74,7 @@ src/
         │   └── GuiMixin                 HUD 注入点（→ WandHud）
         ├── interaction/ClientLevelClipMixin  ★ 客户端射线：淡化方块当空气（见第六节）
         ├── recording/ClientLevelMixin   给记录器喂方块变化
-        ├── config/ClientLanguageMixin   翻译劫持（按 selective_rendering. 前缀过滤）
-        ├── compat/                      第三方 Mod 补丁：Fabric Renderer API (Indigo)、EntityCulling、ImmediatelyFast
-        └── sodium/                      Sodium 补丁（含 LightDataAccessMixin）
+        └── compat/                      第三方 Mod 补丁：sodium/、indigo/（Fabric Renderer API）、entityCulling/、ImmediatelyFast/
 ```
 
 按版本取舍的文件（内部用 `//? if` 区分，没有"另存一份"）：
@@ -90,9 +87,10 @@ src/
 | `blockentity/SelectiveSubmitNodeCollector.java` | 方块实体淡化的入口，继承上面那个类，只管 `target()` / `order(n)` |
 | `mixin/blockentity/BlockFeatureRendererMixin` 等 | 注入目标类 / 方法随版本变 |
 
-> `src/client/resources/selective-rendering.client.mixins.json` **只有一份**；
-> 只在部分版本存在的 mixin（`blockentity.BufferSourceMixin`、`compat.ImmediatelyFastBufferSourceMixin`、
-> `blockentity.RenderTypeFeatureRendererMixin`）在 json 里用同样的 `//? if` 条件包住。
+> `src/client/resources/selective-rendering.client.mixins.json` **只有一份，是纯 JSON，不含任何条件**。
+> 只在部分版本存在的 mixin（`blockentity.BufferSourceMixin`、`compat.ImmediatelyFast.ImmediatelyFastBufferSourceMixin`、
+> `blockentity.RenderTypeFeatureRendererMixin`）在 json 里始终列出；目标不存在的版本里，
+> 源文件用 `//? if` 把类换成 dummy mixin：`@Mixin(Minecraft.class)` + 空类体，不注入任何方法。
 
 ---
 
@@ -218,6 +216,10 @@ synchronized (LOCK) {
 把 manager 的值回灌到控件（`syncFromManager()`）会触发控件的 `setValueChangeCallback`，
 回调又会去改 manager。所以用一个 `syncing` 标志在回灌期间屏蔽回调（见 `write(...)`）。
 **新增配置项时务必照这个模式接线**，否则改一次会触发两次重建。
+
+新增配置项：在 `ModConfigs` 里 `new ConfigXxx(name, ...).apply(KEY)` 并加进 `OPTIONS`（界面按这个顺序列出），
+然后在 `lang/*.json` 里补 `selective_rendering.config.name.<name>` / `.comment.<name>`
+（快捷键类再补 `.prettyName.<name>`）。翻译走 Minecraft 标准语言文件，由 Fabric API 的 resource loader 加载（MaLiLib 本身就依赖它）。
 
 配置项本身只是"视图"，权威数据源永远是 `SelectiveRenderingManager`；
 落盘由 `ModConfig.save()` 防抖异步完成。

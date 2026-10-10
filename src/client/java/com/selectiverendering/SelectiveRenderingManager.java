@@ -12,6 +12,7 @@ import com.selectiverendering.render.HiddenSections;
 import com.selectiverendering.render.RebuildScheduler;
 import com.selectiverendering.util.Log;
 import net.minecraft.core.BlockPos;
+import fi.dy.masa.malilib.config.IConfigOptionListEntry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -97,7 +98,7 @@ public final class SelectiveRenderingManager {
 	 *
 	 * <p>枚举顺序 = 滚轮循环顺序 = 配置下拉框顺序，不要随意调整。
 	 */
-	public enum Mode {
+	public enum Mode implements IConfigOptionListEntry {
 		OFF("off"),
 		REGION_INSIDE_LISTED("region_inside_listed"),
 		REGION_INSIDE_UNLISTED("region_inside_unlisted"),
@@ -121,6 +122,34 @@ public final class SelectiveRenderingManager {
 		public Mode cycle(int direction) {
 			Mode[] values = values();
 			return values[Math.floorMod(ordinal() + direction, values.length)];
+		}
+
+		@Override
+		public String getStringValue() {
+			return name();
+		}
+
+		@Override
+		public String getDisplayName() {
+			return displayName().getString();
+		}
+
+		@Override
+		public Mode cycle(boolean forward) {
+			return cycle(forward ? 1 : -1);
+		}
+
+		@Override
+		public Mode fromString(String value) {
+			if (value != null) {
+				for (Mode entry : values()) {
+					if (entry.name().equalsIgnoreCase(value.trim())) {
+						return entry;
+					}
+				}
+			}
+
+			return OFF;
 		}
 
 		public boolean usesRegion() {
@@ -168,7 +197,7 @@ public final class SelectiveRenderingManager {
 	 * 名单是配置里的 {@code recorded}（对应 {@link #RECORDED}），
 	 * 和渲染用的 {@link #RULES} 是两份独立的名单。
 	 */
-	public enum RecordMode {
+	public enum RecordMode implements IConfigOptionListEntry {
 		LISTED("record_listed"),
 		UNLISTED("record_unlisted");
 
@@ -180,6 +209,35 @@ public final class SelectiveRenderingManager {
 
 		public Component displayName() {
 			return Component.translatable(SelectiveRendering.MOD_ID + ".mode." + key);
+		}
+
+		@Override
+		public String getStringValue() {
+			return name();
+		}
+
+		@Override
+		public String getDisplayName() {
+			return displayName().getString();
+		}
+
+		@Override
+		public RecordMode cycle(boolean forward) {
+			RecordMode[] values = values();
+			return values[Math.floorMod(ordinal() + (forward ? 1 : -1), values.length)];
+		}
+
+		@Override
+		public RecordMode fromString(String value) {
+			if (value != null) {
+				for (RecordMode entry : values()) {
+					if (entry.name().equalsIgnoreCase(value.trim())) {
+						return entry;
+					}
+				}
+			}
+
+			return UNLISTED;
 		}
 	}
 
@@ -201,7 +259,7 @@ public final class SelectiveRenderingManager {
 	 * {@code RecordMode} 决定"哪些方块的变化值得记录"（名单内 / 名单外），
 	 * 本枚举决定"记录到的位置最终怎么用"。
 	 */
-	public enum RecordApplyMode {
+	public enum RecordApplyMode implements IConfigOptionListEntry {
 		/** 新增：把记录到的位置合并成长方体，加进选区列表。 */
 		ADD("record_add"),
 
@@ -216,6 +274,35 @@ public final class SelectiveRenderingManager {
 
 		public Component displayName() {
 			return Component.translatable(SelectiveRendering.MOD_ID + ".mode." + key);
+		}
+
+		@Override
+		public String getStringValue() {
+			return name();
+		}
+
+		@Override
+		public String getDisplayName() {
+			return displayName().getString();
+		}
+
+		@Override
+		public RecordApplyMode cycle(boolean forward) {
+			RecordApplyMode[] values = values();
+			return values[Math.floorMod(ordinal() + (forward ? 1 : -1), values.length)];
+		}
+
+		@Override
+		public RecordApplyMode fromString(String value) {
+			if (value != null) {
+				for (RecordApplyMode entry : values()) {
+					if (entry.name().equalsIgnoreCase(value.trim())) {
+						return entry;
+					}
+				}
+			}
+
+			return ADD;
 		}
 	}
 

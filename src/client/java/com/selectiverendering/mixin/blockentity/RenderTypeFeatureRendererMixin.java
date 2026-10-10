@@ -1,26 +1,20 @@
 package com.selectiverendering.mixin.blockentity;
 
+import org.spongepowered.asm.mixin.Mixin;
 //? if >=26.2 {
-
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.selectiverendering.blockentity.BufferSourceHooks;
 import net.minecraft.client.renderer.feature.RenderTypeFeatureRenderer;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+//?} else {
+/*import net.minecraft.client.Minecraft;
+*///?}
 
-/**
- * 26.2+ 版本里拿 {@code VertexConsumer} 的统一入口。
- *
- * <p>旧版（26.1.2）是在 {@code MultiBufferSource.BufferSource.getBuffer}
- * 和 ImmediatelyFast 的 {@code BatchableBufferSource.getBuffer} 上打补丁；
- * 新版改成 {@code RenderTypeFeatureRenderer.getVertexBuilder}，
- * 一个点就能覆盖所有 feature renderer。
- *
- * <p>实际判断逻辑都在 {@link BufferSourceHooks#wrap}。
- */
+// 26.2+ 取 VertexConsumer 的统一入口；26.1.2 没有这个类，这里是空壳
+//? if >=26.2 {
 @Mixin(RenderTypeFeatureRenderer.class)
 public class RenderTypeFeatureRendererMixin {
 	@Inject(method = "getVertexBuilder", at = @At("RETURN"), cancellable = true)
@@ -28,4 +22,8 @@ public class RenderTypeFeatureRendererMixin {
 		cir.setReturnValue(BufferSourceHooks.wrap(renderType, cir.getReturnValue()));
 	}
 }
-//?}
+//?} else {
+/*@Mixin(Minecraft.class)
+public class RenderTypeFeatureRendererMixin {
+}
+*///?}

@@ -39,29 +39,12 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 //?}
 import org.joml.Quaternionf;
+import org.jspecify.annotations.NonNull;
 
 import java.util.List;
 
 /**
- * 把 {@link OrderedSubmitNodeCollector} 的每个 {@code submitXxx} 转发给 {@link #target()}，
- * 其中真正用 {@code RenderType} 画几何的几个，转发前把 RenderType 换成
- * {@link TranslucentRenderTypes#translucentVariant} 的半透明变体。
- *
- * <p>这是 {@link SelectiveSubmitNodeCollector} 的"样板代码"部分，单独成类是为了
- * 只维护<b>一份</b>方法清单：外层的 collector 和 {@code order(n)} 返回的层都继承它，
- * 只是 {@link #target()} 不同。
- *
- * <h2>⚠ 维护成本警告</h2>
- * <p>{@code OrderedSubmitNodeCollector} 每个 MC 版本都会增删方法，这里都得跟着改。
- * 漏实现的方法在<b>编译期</b>就会报错（接口方法是抽象的），但<b>签名写错</b>（比如参数顺序）
- * 就只是少包装了一个方法，表现为"那个类型的方块实体不变淡"。
- * 各版本的差异用 Stonecutter 的 {@code //? if} 在本文件里按版本取舍，
- * 新增 MC 版本时要把接口的每个 {@code submitXxx} 逐个核对一遍。
- *
- * <p>只有走 RenderType 画几何的提交会被改写
- * （{@code submitModel} / {@code submitCrumblingOverlay} / {@code submitModelPart} /
- * {@code submitBlockModel} / {@code submitCustomGeometry}）；
- * {@code submitShadow} / {@code submitNameTag} / {@code submitText} 等与方块材质无关的提交原样转发。
+ * 把 {@link OrderedSubmitNodeCollector} 的每个提交转发给 {@link #target()}，转发前把 RenderType 换成半透明变体。
  */
 abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector {
 	/** 转发的目的地。 */
@@ -72,29 +55,29 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	//? if >=26.3 {
 	@Override
 	public <S> void submitModel(
-		Model<? super S> model,
-		S state,
-		PoseStack poseStack,
-		RenderType renderType,
-		int lightCoords,
-		int overlayCoords,
-		int tintedColor,
-		UvMapping uvMapping,
-		int outlineColor
+            @NonNull Model<? super S> model,
+            @NonNull S state,
+            @NonNull PoseStack poseStack,
+            @NonNull RenderType renderType,
+            int lightCoords,
+            int overlayCoords,
+            int tintedColor,
+            UvMapping uvMapping,
+            int outlineColor
 	) {
 		target().submitModel(model, state, poseStack, TranslucentRenderTypes.translucentVariant(renderType), lightCoords, overlayCoords, tintedColor, uvMapping, outlineColor);
 	}
 
 	@Override
 	public <S> void submitCrumblingOverlay(
-		Model<? super S> model,
-		S state,
-		PoseStack poseStack,
-		RenderType renderType,
+			@NonNull Model<? super S> model,
+			@NonNull S state,
+			@NonNull PoseStack poseStack,
+			@NonNull RenderType renderType,
 		int lightCoords,
 		int overlayCoords,
 		int outlineColor,
-		ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
+		ModelFeatureRenderer.@NonNull CrumblingOverlay crumblingOverlay
 	) {
 		target().submitCrumblingOverlay(model, state, poseStack, TranslucentRenderTypes.translucentVariant(renderType), lightCoords, overlayCoords, outlineColor, crumblingOverlay);
 	}
@@ -136,30 +119,30 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	*///?}
 
 	@Override
-	public void submitBlockModel(PoseStack poseStack, RenderType renderType, List<BlockStateModelPart> parts, int[] tintLayers, int lightCoords, int overlayCoords, int outlineColor) {
+	public void submitBlockModel(@NonNull PoseStack poseStack, @NonNull RenderType renderType, List<BlockStateModelPart> parts, int[] tintLayers, int lightCoords, int overlayCoords, int outlineColor) {
 		target().submitBlockModel(poseStack, TranslucentRenderTypes.translucentVariant(renderType), parts, tintLayers, lightCoords, overlayCoords, outlineColor);
 	}
 
 	@Override
-	public void submitCustomGeometry(PoseStack poseStack, RenderType renderType, SubmitNodeCollector.CustomGeometryRenderer renderer) {
+	public void submitCustomGeometry(@NonNull PoseStack poseStack, @NonNull RenderType renderType, SubmitNodeCollector.@NonNull CustomGeometryRenderer renderer) {
 		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.translucentVariant(renderType), renderer);
 	}
 
 	// ───────────── 原样转发：各版本签名一致的 ─────────────
 
 	@Override
-	public void submitShadow(PoseStack poseStack, float radius, List<EntityRenderState.ShadowPiece> pieces) {
+	public void submitShadow(@NonNull PoseStack poseStack, float radius, @NonNull List<EntityRenderState.ShadowPiece> pieces) {
 		target().submitShadow(poseStack, radius, pieces);
 	}
 
 	@Override
 	public void submitText(
-		PoseStack poseStack,
+		@NonNull PoseStack poseStack,
 		float x,
 		float y,
-		FormattedCharSequence string,
+		@NonNull FormattedCharSequence string,
 		boolean dropShadow,
-		Font.DisplayMode displayMode,
+		Font.@NonNull DisplayMode displayMode,
 		int lightCoords,
 		int color,
 		int backgroundColor,
@@ -169,12 +152,12 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	}
 
 	@Override
-	public void submitFlame(PoseStack poseStack, EntityRenderState renderState, Quaternionf rotation) {
+	public void submitFlame(@NonNull PoseStack poseStack, @NonNull EntityRenderState renderState, @NonNull Quaternionf rotation) {
 		target().submitFlame(poseStack, renderState, rotation);
 	}
 
 	@Override
-	public void submitLeash(PoseStack poseStack, EntityRenderState.LeashState leashState) {
+	public void submitLeash(@NonNull PoseStack poseStack, EntityRenderState.@NonNull LeashState leashState) {
 		target().submitLeash(poseStack, leashState);
 	}
 
@@ -182,7 +165,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	//? if >=26.2 {
 	@Override
-	public void submitNameTag(PoseStack poseStack, Vec3 nameTagAttachment, int offset, Component name, boolean seeThrough, int lightCoords, CameraRenderState camera) {
+	public void submitNameTag(@NonNull PoseStack poseStack, Vec3 nameTagAttachment, int offset, @NonNull Component name, boolean seeThrough, int lightCoords, @NonNull CameraRenderState camera) {
 		target().submitNameTag(poseStack, nameTagAttachment, offset, name, seeThrough, lightCoords, camera);
 	}
 	//?} else {
@@ -194,14 +177,14 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	//? if >=26.3 {
 	@Override
-	public void submitTextBackground(PoseStack poseStack, float x, float y, float width, float height, int color, Font.DisplayMode displayMode, int lightCoords) {
+	public void submitTextBackground(@NonNull PoseStack poseStack, float x, float y, float width, float height, int color, Font.@NonNull DisplayMode displayMode, int lightCoords) {
 		target().submitTextBackground(poseStack, x, y, width, height, color, displayMode, lightCoords);
 	}
 	//?}
 
 	//? if >=26.2 {
 	@Override
-	public void submitMovingBlock(PoseStack poseStack, MovingBlockRenderState movingBlockRenderState, int outlineColor) {
+	public void submitMovingBlock(@NonNull PoseStack poseStack, @NonNull MovingBlockRenderState movingBlockRenderState, int outlineColor) {
 		target().submitMovingBlock(poseStack, movingBlockRenderState, outlineColor);
 	}
 	//?} else {
@@ -213,7 +196,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	//? if >=26.3 {
 	@Override
-	public void submitBreakingBlockModel(PoseStack poseStack, List<BlockStateModelPart> parts, int progress, boolean afterTerrain) {
+	public void submitBreakingBlockModel(@NonNull PoseStack poseStack, @NonNull List<BlockStateModelPart> parts, int progress, boolean afterTerrain) {
 		target().submitBreakingBlockModel(poseStack, parts, progress, afterTerrain);
 	}
 	//?} else if >=26.2 {
@@ -230,7 +213,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	//? if >=26.2 {
 	@Override
-	public void submitShapeOutline(PoseStack poseStack, VoxelShape shape, RenderType renderType, int color, float width, boolean afterTerrain) {
+	public void submitShapeOutline(@NonNull PoseStack poseStack, @NonNull VoxelShape shape, @NonNull RenderType renderType, int color, float width, boolean afterTerrain) {
 		target().submitShapeOutline(poseStack, shape, renderType, color, width, afterTerrain);
 	}
 	//?}
@@ -238,14 +221,14 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	//? if >=26.3 {
 	@Override
 	public void submitItem(
-		PoseStack poseStack,
-		ItemDisplayContext displayContext,
-		int lightCoords,
-		int overlayCoords,
-		int outlineColor,
-		int[] tintLayers,
-		ItemQuads quads,
-		ItemStackRenderState.FoilType foilType
+            @NonNull PoseStack poseStack,
+            @NonNull ItemDisplayContext displayContext,
+            int lightCoords,
+            int overlayCoords,
+            int outlineColor,
+            int @NonNull [] tintLayers,
+            @NonNull ItemQuads quads,
+            ItemStackRenderState.@NonNull FoilType foilType
 	) {
 		target().submitItem(poseStack, displayContext, lightCoords, overlayCoords, outlineColor, tintLayers, quads, foilType);
 	}
@@ -267,12 +250,12 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	//? if >=26.2 {
 	@Override
-	public void submitQuadParticleGroup(QuadParticleRenderState particles) {
+	public void submitQuadParticleGroup(@NonNull QuadParticleRenderState particles) {
 		target().submitQuadParticleGroup(particles);
 	}
 
 	@Override
-	public void submitGizmoPrimitives(DrawableGizmoPrimitives.Group group, CameraRenderState camera, boolean onTop) {
+	public void submitGizmoPrimitives(DrawableGizmoPrimitives.@NonNull Group group, @NonNull CameraRenderState camera, boolean onTop) {
 		target().submitGizmoPrimitives(group, camera, onTop);
 	}
 	//?} else {

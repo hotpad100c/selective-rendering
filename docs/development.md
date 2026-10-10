@@ -46,12 +46,10 @@ return minecraft.gameRenderer.mainCamera();
 - **不用手写 `/* */`**：两个分支都写成普通代码，运行一次 `Set active project to ...`，
   Stonecutter 会自动把非当前版本的分支注释掉。
 - 注释里的 `/** */` 会被转义成 `/^* ^/`，这是正常的。
-- `.mixins.json` 也支持同样的条件（见 `stonecutter.gradle.kts` 里的 handlers）。
-  打包时 `build.gradle.kts` 会把残留的注释剥掉，产物是严格合法的 JSON。
-  **条件项放在列表前面、最后一项保持无条件**，这样不会遇到尾逗号问题。
-- **整个文件只在某些版本存在**（如 `BufferSourceMixin` 只有 26.1.2、`RenderTypeFeatureRendererMixin` 26.2 起才有）：
-  把 `package` 行之后的全部内容包进一个条件里，其它版本得到的是一个空文件；
-  同时在 `selective-rendering.client.mixins.json` 里给它加同样的条件。
+- **`.mixins.json` 不放条件**，必须是纯 JSON。
+- **mixin 只在某些版本有目标**（如 `BufferSourceMixin` 只有 26.1.2、`RenderTypeFeatureRendererMixin` 26.2 起才有）：
+  json 里照常登记；源文件里真正的 mixin 用 `//? if` 包起来，另一个分支换成 dummy mixin ——
+  `@Mixin(Minecraft.class)` 加一个空类体，不注入任何方法。这样所有版本的类名和 json 都一致。
 
 ---
 
@@ -63,7 +61,7 @@ return minecraft.gameRenderer.mainCamera();
 3. `Set active project to <新版本>`，然后 `.\gradlew :<新版本>:compileClientJava`，
    逐个修编译错误：差异用 `//? if` 包起来；
 4. 对照下表核对 `Platform` 的每个成员；
-5. mixin json 只需要在条件项里补充该版本特有的 mixin；
+5. 该版本特有的 mixin 照常登记进 json，其它版本里对应的类写成 dummy mixin；
 6. `.\gradlew build`。
 
 ### `Platform` 逐项对照（最容易漏）

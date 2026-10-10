@@ -2,6 +2,7 @@ package com.selectiverendering.config;
 
 import java.util.List;
 
+import com.selectiverendering.SelectiveRenderingManager.Mode;
 import fi.dy.masa.malilib.config.IConfigBase;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.GuiConfigsBase.ConfigOptionWrapper;
@@ -45,14 +46,14 @@ public final class WidgetModeRow extends WidgetConfigOption {
 		int dropdownX = x + labelWidth + 10;
 		int resetX = dropdownX + configWidth + 2;
 
-		this.dropdown = new ModeDropdown(dropdownX, y, configWidth, 20, ModeOption.all());
-		this.dropdown.setSelectedEntry(ModeOption.of(mode.mode()));
+		this.dropdown = new ModeDropdown(dropdownX, y, configWidth, 20, List.of(Mode.values()));
+		this.dropdown.setSelectedEntry(mode.mode());
 		this.addWidget(this.dropdown);
 
 		ButtonGeneric reset = this.createResetButton(resetX, y, mode);
 		this.addButton(reset, (button, mouseButton) -> {
 			mode.resetToDefault();
-			this.dropdown.setSelectedEntry(ModeOption.of(mode.mode()));
+			this.dropdown.setSelectedEntry(mode.mode());
 			this.refresh();
 		});
 	}
@@ -74,8 +75,8 @@ public final class WidgetModeRow extends WidgetConfigOption {
 		}
 	}
 
-	private static final class ModeDropdown extends WidgetDropDownList<ModeOption> {
-		private ModeDropdown(int x, int y, int width, int height, List<ModeOption> entries) {
+	private static final class ModeDropdown extends WidgetDropDownList<Mode> {
+		private ModeDropdown(int x, int y, int width, int height, List<Mode> entries) {
 			super(x, y, width, height, 200, 9, entries);
 		}
 
@@ -89,7 +90,7 @@ public final class WidgetModeRow extends WidgetConfigOption {
 		}
 
 		@Override
-		protected String getDisplayString(ModeOption entry) {
+		protected String getDisplayString(Mode entry) {
 			return entry.getDisplayName();
 		}
 

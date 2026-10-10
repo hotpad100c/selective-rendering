@@ -120,23 +120,6 @@ tasks.processResources {
 	}
 }
 
-// Stonecutter 处理 .mixins.json 后，被禁用的条目留在 /* */ 里、条件指令是 // 行注释。
-// 这里在打包前把它们剥掉，保证产物是严格合法的 JSON（不依赖 Mixin 的解析器是否宽松）。
-tasks.withType<ProcessResources>().configureEach {
-	doLast {
-		destinationDir.walkTopDown()
-			.filter { it.isFile && it.name.endsWith(".mixins.json") }
-			.forEach { file ->
-				val stripped = file.readText()
-					.replace(Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
-					.lines()
-					.filterNot { it.trimStart().startsWith("//") }
-					.joinToString("\n")
-				file.writeText(stripped)
-			}
-	}
-}
-
 tasks.withType<JavaCompile>().configureEach {
 	options.release = 25
 	options.encoding = "UTF-8"

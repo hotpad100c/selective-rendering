@@ -1,33 +1,28 @@
 package com.selectiverendering.mixin.compat.ImmediatelyFast;
 
+import org.spongepowered.asm.mixin.Mixin;
 //? if <26.2 {
-
 /*import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.selectiverendering.blockentity.BufferSourceHooks;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+*///?} else {
+import net.minecraft.client.Minecraft;
+//?}
 
-/^*
- * <b>ImmediatelyFast 兼容补丁</b>。
- *
- * <p>ImmediatelyFast 会把 {@code BufferSource} 换成自己的
- * {@code BatchableBufferSource}（为了批处理），于是 {@code BufferSourceMixin}
- * 就打不到了，必须再补一刀。逻辑完全一样。
- *
- * <p>{@code require = 0} + {@code remap = false} + 字符串 target：
- * 保证没装 ImmediatelyFast 时不会崩。
- *
- * <p>26.2+ 的渲染架构改了以后，取 buffer 的方式变了
- * （走 {@code RenderTypeFeatureRenderer}），这个补丁也就不再需要。
- ^/
-@Mixin(targets = "net.raphimc.immediatelyfast.feature.core.BatchableBufferSource", remap = false)
+// ImmediatelyFast 用 BatchableBufferSource 替换了 BufferSource，BufferSourceMixin 打不到；26.2+ 不再需要，这里是空壳
+//? if <26.2 {
+/*@Mixin(targets = "net.raphimc.immediatelyfast.feature.core.BatchableBufferSource", remap = false)
 public class ImmediatelyFastBufferSourceMixin {
 	@Inject(method = "getBuffer", at = @At("RETURN"), cancellable = true, remap = false)
 	private void selectiveRendering$wrap(RenderType renderType, CallbackInfoReturnable<VertexConsumer> cir) {
 		cir.setReturnValue(BufferSourceHooks.wrap(renderType, cir.getReturnValue()));
 	}
 }
-*///?}
+*///?} else {
+@Mixin(Minecraft.class)
+public class ImmediatelyFastBufferSourceMixin {
+}
+//?}

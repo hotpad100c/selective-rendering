@@ -28,7 +28,7 @@
 ## 已知事实 / 证据
 
 - Stonecutter 0.9.8（`dev.kikugie.stonecutter`）。节点是 Gradle 子项目 `:26.1.2` / `:26.2` / `:26.3`，项目目录 `versions/<v>/`，里面只有构建产物。
-- 各节点的处理后源码在 `versions/<v>/build/generated/stonecutter/`；`.json` 需要 `stonecutter handlers { inherit("json5","json") }` 才会被预处理（已加在 `stonecutter.gradle.kts`）。
+- 各节点的处理后源码在 `versions/<v>/build/generated/stonecutter/`；`.json` 不再预处理（已去掉 handlers）。
 - 光照机制的前提，已用 `javap` 核对过字节码:
   - `ClientPacketListener.applyLightData(int,int,ClientboundLightUpdatePacketData,boolean)`、`enableChunkLight(LevelChunk,int,int)`、`LevelLightEngine.runLightUpdates()` 的签名与 mixin 一致。
   - 服务端光照先 `queueSectionData` 排队，到下一次 `runLightUpdates` 才落地并覆盖客户端结果，所以重算必须在 `runLightUpdates` **之后**。
@@ -49,7 +49,7 @@
 
 - 在 Stonecutter 条件里，注释中的 `/** */` 会被自动转义成 `/^* ^/`，属正常现象。
 - 两个分支都先写成**普通代码**，运行 `Set active project to <v>`，Stonecutter 会自动把非当前版本的分支注释掉；不需要手写 `/* */`。
-- mixin json 处理后，被禁用的条目留在 `/* */` 里、条件行是 `//` 注释；`build.gradle.kts` 在 `processResources` 的 `doLast` 里把它们剥掉，保证产物是严格合法的 JSON。
+- mixin json 是纯 JSON、无条件；版本上不存在目标的 mixin 在源码里换成 dummy mixin（`@Mixin(Minecraft.class)`，空类体）。
 - Kotlin DSL 里 `processResources` 的 `filesMatching { expand(...) }` 不能直接引用脚本级变量（会破坏 configuration cache），必须先拷成局部 `val`。
 - 会话中一次 `rm` 被权限拦截，所以旧文件是"移走"而不是真删。
 
@@ -70,7 +70,7 @@
 | 重建调度三档 | `render/RebuildScheduler.java` |
 | 跨版本适配层 | `compat/Platform.java` |
 | 方块实体淡化 | `blockentity/TranslucentSubmitForwarder.java`、`blockentity/SelectiveSubmitNodeCollector.java`、`mixin/blockentity/BlockEntityRenderDispatcherMixin.java` |
-| mixin 配置（只有一份，含版本条件） | `src/client/resources/selective-rendering.client.mixins.json` |
+| mixin 配置（只有一份，纯 JSON） | `src/client/resources/selective-rendering.client.mixins.json` |
 | 文档 | `docs/architecture.md`（类职责）、`docs/development.md`（Stonecutter 用法、加新版本） |
 
 ## 日常命令
@@ -98,7 +98,7 @@
 
 - **提交前必须把 `active` 切回 26.3**，否则 diff 会被大量注释翻转淹没。
 - 改任何共用代码后，三个节点都要编译一遍：`.\gradlew :26.1.2:compileClientJava :26.2:compileClientJava :26.3:compileClientJava`。
-- 新增 mixin 要同时登记到 `selective-rendering.client.mixins.json`；只在部分版本存在的，json 条目和源文件都要包同样的 `//? if` 条件。条件项放在 json 列表前面、最后一项保持无条件。
+- 新增 mixin 要同时登记到 `selective-rendering.client.mixins.json`；只在部分版本存在目标的，json 照常登记，源文件里另一个分支写成 dummy mixin。
 - 不要往 `versions/<v>/` 里放源码——那里只是构建产物目录。
 - 别动作者原有的活塞相关未提交改动（`Alpha.queryBlockEntity` 及 `alphaNow` 里的 `carried` 分支），除非作者要求。
 
