@@ -16,6 +16,11 @@ public final class RegionTargetsConfig extends ConfigBase<RegionTargetsConfig> i
 		this.handle = handle;
 	}
 
+	@Override
+	public String getConfigGuiDisplayName() {
+		return "";
+	}
+
 	RegionHandle handle() {
 		return this.handle;
 	}

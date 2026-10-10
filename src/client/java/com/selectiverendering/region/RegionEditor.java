@@ -143,7 +143,7 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.say("[state] {} region(s) recorded", added);
+		Log.debug("[state] {} region(s) recorded", added);
 
 		if (SelectiveRenderingManager.getMode().usesRegion()) {
 			for (Region box : boxes) {
@@ -190,7 +190,7 @@ public final class RegionEditor {
 				}
 
 				if (next.size() > MAX_SUBTRACT_FRAGMENTS) {
-					Log.say("[state] 裁剪产生的碎片过多（>{}），已放弃：选区形状过于破碎", MAX_SUBTRACT_FRAGMENTS);
+					Log.warn("[state] 裁剪产生的碎片过多（>{}），已放弃：选区形状过于破碎", MAX_SUBTRACT_FRAGMENTS);
 					return false;
 				}
 
@@ -208,7 +208,7 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.say("[state] regions clipped by recorder: {} -> {}", before, kept);
+		Log.debug("[state] regions clipped by recorder: {} -> {}", before, kept);
 
 		if (SelectiveRenderingManager.getMode().usesRegion()) {
 			// 裁剪未保留被移除的范围，需全量重建。
@@ -221,7 +221,7 @@ public final class RegionEditor {
 	public static boolean addRegion(Region newRegion) {
 		synchronized (SelectiveRenderingManager.LOCK) {
 			if (SelectiveRenderingManager.REGIONS.contains(newRegion)) {
-				Log.say("[state] region already added: {}", newRegion.toSource());
+				Log.warn("[state] region already added: {}", newRegion.toSource());
 				return false;
 			}
 
@@ -229,7 +229,7 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.say("[state] region added: {}", newRegion.toSource());
+		Log.debug("[state] region added: {}", newRegion.toSource());
 
 		if (SelectiveRenderingManager.getMode().usesRegion()) {
 			HiddenSections.mark(newRegion.box());
@@ -291,7 +291,7 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.say("[state] {} region(s) removed", dropped.size());
+		Log.debug("[state] {} region(s) removed", dropped.size());
 
 		if (SelectiveRenderingManager.getMode().usesRegion()) {
 			for (Region region : dropped) {
@@ -368,7 +368,7 @@ public final class RegionEditor {
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.say("[state] regions clipped by {}: {} -> {}", cut.toSource(), before.size(), kept);
+		Log.debug("[state] regions clipped by {}: {} -> {}", cut.toSource(), before.size(), kept);
 
 		if (SelectiveRenderingManager.getMode().usesRegion()) {
 			for (Region region : before) {

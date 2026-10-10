@@ -1,6 +1,8 @@
 package com.selectiverendering.blockentity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.QuadInstance;
+import com.selectiverendering.render.Alpha;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 //? if <26.2 {
@@ -24,12 +26,12 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 //? if >=26.2 {
 import net.minecraft.client.renderer.state.level.QuadParticleRenderState;
 //?}
+import net.minecraft.client.resources.model.geometry.BakedQuad;
 //? if >=26.3 {
 import net.minecraft.client.renderer.texture.UvMapping;
 import net.minecraft.client.resources.model.geometry.ItemQuads;
 //?} else {
 /*import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
 *///?}
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
@@ -41,11 +43,45 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Quaternionf;
 import org.jspecify.annotations.NonNull;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** 转发渲染提交，并将 RenderType 替换为半透明变体。 */
 abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector {
 	protected abstract OrderedSubmitNodeCollector target();
+
+	/**将物品窜改进半透明管道 */
+	private void submitFadedItem(PoseStack poseStack, int lightCoords, int overlayCoords, int[] tintLayers, List<BakedQuad> quads) {
+		Map<RenderType, List<BakedQuad>> groups = new LinkedHashMap<>();
+
+		for (BakedQuad quad : quads) {
+			groups.computeIfAbsent(TranslucentRenderTypes.variant(quad.materialInfo().itemRenderType()), type -> new ArrayList<>()).add(quad);
+		}
+
+		groups.forEach((renderType, group) -> target().submitCustomGeometry(poseStack, renderType, (pose, consumer) -> {
+			QuadInstance instance = new QuadInstance();
+			instance.setLightCoords(lightCoords);
+			instance.setOverlayCoords(overlayCoords);
+
+			for (BakedQuad quad : group) {
+				BakedQuad.MaterialInfo info = quad.materialInfo();
+				boolean tinted = info.isTinted() && info.tintIndex() >= 0 && info.tintIndex() < tintLayers.length;
+
+				instance.setColor(tinted(tinted ? tintLayers[info.tintIndex()] : -1));
+				consumer.putBakedQuad(pose, quad, instance);
+			}
+		}));
+	}
+
+	/** 把隐藏透明度乘进颜色的 alpha；调用方传入没有 alpha 的颜色时按不透明处理。 */
+	private static int tinted(int color) {
+		int existing = color >>> 24;
+		int alpha = (existing == 0 ? 255 : existing) * Alpha.getHiddenAlpha() / 255;
+
+		return (color & 0x00FFFFFF) | (alpha << 24);
+	}
 
 
 	//? if >=26.3 {
@@ -61,7 +97,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
             UvMapping uvMapping,
             int outlineColor
 	) {
-		target().submitModel(model, state, poseStack, TranslucentRenderTypes.translucentVariant(renderType), lightCoords, overlayCoords, tintedColor, uvMapping, outlineColor);
+		target().submitModel(model, state, poseStack, TranslucentRenderTypes.variant(renderType), lightCoords, overlayCoords, tinted(tintedColor), uvMapping, outlineColor);
 	}
 
 	@Override
@@ -91,7 +127,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 		int outlineColor,
 		ModelFeatureRenderer.CrumblingOverlay crumblingOverlay
 	) {
-		target().submitModel(model, state, poseStack, TranslucentRenderTypes.translucentVariant(renderType), lightCoords, overlayCoords, tintedColor, sprite, outlineColor, crumblingOverlay);
+		target().submitModel(model, state, poseStack, TranslucentRenderTypes.variant(renderType), lightCoords, overlayCoords, tinted(tintedColor), sprite, outlineColor, crumblingOverlay);
 	}
 	*///?}
 
@@ -121,7 +157,8 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 
 	@Override
 	public void submitCustomGeometry(@NonNull PoseStack poseStack, @NonNull RenderType renderType, SubmitNodeCollector.@NonNull CustomGeometryRenderer renderer) {
-		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.translucentVariant(renderType), renderer);
+		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.variant(renderType),
+			(pose, consumer) -> renderer.render(pose, new AlphaVertexConsumer(consumer, Alpha.getHiddenAlpha())));
 	}
 
 
@@ -224,7 +261,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
             @NonNull ItemQuads quads,
             ItemStackRenderState.@NonNull FoilType foilType
 	) {
-		target().submitItem(poseStack, displayContext, lightCoords, overlayCoords, outlineColor, tintLayers, quads, foilType);
+		submitFadedItem(poseStack, lightCoords, overlayCoords, tintLayers, quads.all());
 	}
 	//?} else {
 	/*@Override
@@ -238,7 +275,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 		List<BakedQuad> quads,
 		ItemStackRenderState.FoilType foilType
 	) {
-		target().submitItem(poseStack, displayContext, lightCoords, overlayCoords, outlineColor, tintLayers, quads, foilType);
+		submitFadedItem(poseStack, lightCoords, overlayCoords, tintLayers, quads);
 	}
 	*///?}
 

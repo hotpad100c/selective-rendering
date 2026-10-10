@@ -20,10 +20,10 @@ public class ModCompat {
             Class.forName("com.example.orbitcam.client.OrbitCam")
                     .getMethod("setMouseClaimProvider", BooleanSupplier.class)
                     .invoke(null, (BooleanSupplier) SelectiveRendering::isWandHeld);
-            Log.say("[state] orbitcam mouse claim registered");
+            Log.debug("[state] Orbitcam mouse claim registered");
         }
         catch (Throwable t) {
-            Log.say("[state] orbitcam mouse claim NOT registered ({})", t);
+            Log.debug("[state] Orbitcam mouse claim NOT registered ({})", t);
         }
     }
 }

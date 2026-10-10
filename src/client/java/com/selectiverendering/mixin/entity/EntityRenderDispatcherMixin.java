@@ -11,7 +11,7 @@ import net.minecraft.client.renderer.entity.state.EntityRenderState;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import org.spongepowered.asm.mixin.Mixin;
 
-/** 按所在位置隐藏实体，或将其提交到半透明管线。 */
+/** 按所在位置和实体类型隐藏实体，或将其提交到半透明管线。 */
 @Mixin(EntityRenderDispatcher.class)
 public class EntityRenderDispatcherMixin {
 	@WrapMethod(method = "submit")
@@ -25,7 +25,7 @@ public class EntityRenderDispatcherMixin {
 		SubmitNodeCollector collector,
 		Operation<Void> original
 	) {
-		int alpha = RegionTargets.entityAlpha(state.x, state.y, state.z);
+		int alpha = RegionTargets.entityAlpha(state.entityType, state.x, state.y, state.z);
 		if (alpha == 0) {
 			return;
 		}

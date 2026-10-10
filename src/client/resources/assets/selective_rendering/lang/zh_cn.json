@@ -49,7 +49,7 @@
   "selective_rendering.config.name.wand": "魔杖",
   "selective_rendering.config.comment.wand": "手持生效",
   "selective_rendering.config.name.items": "方块列表（全局）",
-  "selective_rendering.config.comment.items": "已添加的方块，对所有选区生效",
+  "selective_rendering.config.comment.items": "在所有选区里都算作名单内的方块",
   "selective_rendering.config.presets": "预设",
   "selective_rendering.config.presets.new": "预设",
   "selective_rendering.config.presets.new_button": "保存",
@@ -85,5 +85,14 @@
   "selective_rendering.config.comment.region_rules": "仅对这个选区生效的方块，与全局列表取并集",
   "selective_rendering.config.region_blocks": "方块",
   "selective_rendering.config.region_entities": "实体",
-  "selective_rendering.config.region_particles": "粒子"
+  "selective_rendering.config.region_particles": "粒子",
+  "selective_rendering.config.region_apply": "应用",
+  "selective_rendering.config.region_invalid": "请输入三个整数，例如 10, 64, -3",
+  "selective_rendering.config.name.region_entity_types": "实体列表（本地）",
+  "selective_rendering.config.comment.region_entity_types": "这个选区影响的实体 id，例如 minecraft:zombie；留空表示所有实体",
+  "selective_rendering.config.name.region_particle_types": "粒子列表（本地）",
+  "selective_rendering.config.comment.region_particle_types": "这个选区影响的粒子 id，例如 minecraft:flame；留空表示所有粒子",
+  "selective_rendering.config.region_edit": "编辑",
+  "selective_rendering.config.region_back": "返回",
+  "selective_rendering.config.region_title": "选区 #%s"
 }

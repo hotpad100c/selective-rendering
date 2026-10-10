@@ -50,33 +50,32 @@ public final class BlockChangeRecorder {
 		return changed.size();
 	}
 
-	/** 开始记录；要求当前选区的两个角点均已设置。 */
-	public static boolean start() {
+	/** 开始记录；要求当前选区的两个角点均已设置。*/
+	public static void start() {
 		if (recording) {
-			return false;
+			return;
 		}
 
 		if (RegionEditor.selection() == null) {
 			say("no_selection", false);
-			return false;
+			return;
 		}
 
 		changed.clear();
 		pending.clear();
 		recording = true;
-		Log.say("[recorder] started in {}", RegionEditor.selection().toSource());
+		Log.debug("[recorder] Recording started in {}", RegionEditor.selection().toSource());
 		say("started", true);
 
 		if (SelectiveRenderingManager.recordSources().isEmpty()) {
 			say("empty_list", false);
 		}
 
-		return true;
 	}
 
-	public static boolean stop() {
+	public static void stop() {
 		if (!recording) {
-			return false;
+			return;
 		}
 
 		recording = false;
@@ -90,11 +89,11 @@ public final class BlockChangeRecorder {
 		changed.clear();
 
 		List<Region> boxes = RegionMerger.merge(positions);
-		Log.say("[recorder] stopped: {} position(s) -> {} region(s)", positions.size(), boxes.size());
+		Log.debug("[recorder] Recording stopped: {} position(s) -> {} region(s)", positions.size(), boxes.size());
 
 		if (boxes.isEmpty()) {
 			say("nothing", false);
-			return true;
+			return;
 		}
 
 		boolean subtract = SelectiveRenderingManager.getRecordApplyMode() == SelectiveRenderingManager.RecordApplyMode.SUBTRACT;
@@ -104,12 +103,11 @@ public final class BlockChangeRecorder {
 
 		if (!applied) {
 			say("nothing", false);
-			return true;
+			return;
 		}
 
 		say(subtract ? "clipped" : "recorded", true, String.valueOf(boxes.size()));
 
-		return true;
 	}
 
 	public static void toggle() {
@@ -242,7 +240,7 @@ public final class BlockChangeRecorder {
 		}
 
 		if (changed.size() >= MAX_CHANGED) {
-			Log.say("[recorder] 已达容量上限 {}，自动停止记录", MAX_CHANGED);
+			Log.warn("[recorder] Hitting record limit {}, stopped.", MAX_CHANGED);
 			stop();
 			say("full", false, String.valueOf(MAX_CHANGED));
 			return;

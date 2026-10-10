@@ -49,7 +49,7 @@
   "selective_rendering.config.name.wand": "Wand",
   "selective_rendering.config.comment.wand": "Edit selections and blocks",
   "selective_rendering.config.name.items": "Block list (global)",
-  "selective_rendering.config.comment.items": "Blocks already added; applies to every selection",
+  "selective_rendering.config.comment.items": "Blocks that count as listed in every selection",
   "selective_rendering.config.presets": "Presets",
   "selective_rendering.config.presets.new": "Preset",
   "selective_rendering.config.presets.new_button": "New",
@@ -85,5 +85,14 @@
   "selective_rendering.config.comment.region_rules": "Extra blocks for this selection only; combined with the global list",
   "selective_rendering.config.region_blocks": "Blocks",
   "selective_rendering.config.region_entities": "Entities",
-  "selective_rendering.config.region_particles": "Particles"
+  "selective_rendering.config.region_particles": "Particles",
+  "selective_rendering.config.region_apply": "Apply",
+  "selective_rendering.config.region_invalid": "Enter three integers, for example 10, 64, -3",
+  "selective_rendering.config.name.region_entity_types": "Entity list (local)",
+  "selective_rendering.config.comment.region_entity_types": "Entity ids this selection affects, e.g. minecraft:zombie. Empty means every entity",
+  "selective_rendering.config.name.region_particle_types": "Particle list (local)",
+  "selective_rendering.config.comment.region_particle_types": "Particle ids this selection affects, e.g. minecraft:flame. Empty means every particle",
+  "selective_rendering.config.region_edit": "Edit",
+  "selective_rendering.config.region_back": "Back",
+  "selective_rendering.config.region_title": "Selection #%s"
 }

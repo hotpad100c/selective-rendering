@@ -101,6 +101,8 @@ public final class ModConfig {
 		public boolean entities = false;
 		public boolean particles = false;
 		public List<String> rules = new ArrayList<>();
+		public List<String> entityTypes = new ArrayList<>();
+		public List<String> particleTypes = new ArrayList<>();
 	}
 
 	public static ModConfig get() {

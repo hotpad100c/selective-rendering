@@ -222,20 +222,37 @@ synchronized (LOCK) {
 然后在 `lang/*.json` 里补 `selective_rendering.config.name.<name>` / `.comment.<name>`
 （快捷键类再补 `.prettyName.<name>`）。翻译走 Minecraft 标准语言文件，由 Fabric API 的 resource loader 加载（MaLiLib 本身就依赖它）。
 
-### 选区行（可展开）
+### 选区行与选区设置弹窗
 
 `ModConfigGui` 在全局配置项之后列出每个选区：`RegionRowConfig` 是个假配置项，由 `WidgetRegionRow` 画出
-展开按钮 / 范围 / 删除；展开后追加两行角点（只读标签）、一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，
-每项后跟一个方形小按钮）和一个本地 `ConfigStringList`。展开状态按几何范围记在 `ModConfigGui.EXPANDED`；
-标题行在 `render` 里登记外框，由列表控件的 `drawContents` 统一画在最上层。
-改动经 `RegionEditor.updateRegion` 替换 `REGIONS` 里的对应项，并触发重建和光照重算。
+「范围 / 编辑 / 删除」。点编辑打开 `GuiRegionConfigs`（和 MaLiLib 的列表编辑一样是个子界面，关闭或点返回回到
+选区列表并恢复滚动位置），里面是 `RegionConfigs` 生成的行：两个角点输入（`WidgetRegionCorner`）、
+一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，每项后跟一个方形小按钮），以及方块 / 实体 / 粒子三份本地名单
+（标准 `ConfigStringList`）。改动经 `RegionEditor.updateRegion` 替换 `REGIONS` 里的对应项，并触发重建和光照重算。
+
+假配置项（`RegionRowConfig`、`RegionCornerConfig`、`RegionTargetsConfig`）的 `getConfigGuiDisplayName()` 必须返回空串：
+MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把所有配置项的输入框挤出屏幕。
 
 - 方块判定只用 `blocks` 为真的选区（`RenderConfig.blockRegions`）；本地名单与全局名单取并集，
   只在选区内部且模式用到名单时生效（`Alpha.listedLocally`）。
-- 实体：`mixin/entity/EntityRenderDispatcherMixin` 包装 `submit`，位置命中则完全隐藏（透明度 0）或套上 `SelectiveSubmitNodeCollector`（与方块实体同一条半透明管线）。
-  粒子：`mixin/particle/ParticleEngineMixin` 在 `add` 处按生成位置丢弃，不是半透明（和 Lucidity 一致，已存在的粒子不受影响）。
-  两者的命中规则在 `render/RegionTargets`：只看区域类模式（选区内 / 选区外，含 LISTED 变体但不用方块名单，反转同样生效），黑 / 白名单模式不影响它们。
-- 预设里的选区仍是纯范围字符串，应用预设会恢复默认开关。
+- 选区的字符串形式是 `minX,minY,minZ:maxX,maxY,maxZ`，设置与默认值不同时在末尾追加 SNBT：
+  `0,0,0:9,9,9{entities:1b,rules:["minecraft:stone"],entity_types:["minecraft:zombie"]}`
+  （键：`blocks` 默认真、`entities` / `particles` 默认假、`rules`、`entity_types`；只写与默认不同的项）。
+  `Region.parse` 用 `TagParser` 解析，预设里的选区就是这种字符串，所以应用预设会保留每个选区的设置。
+- 角点是文本框 + `✔` 按钮，点按钮才应用，避免边输入边重建。
+- 实体：`mixin/entity/EntityRenderDispatcherMixin` 包装 `submit`，命中则完全隐藏（透明度 0）或套上
+  `SelectiveSubmitNodeCollector`。选区可以带实体类型名单（空 = 所有实体）；名单里没有该类型的实体不受影响。
+  透明度是按提交施加的：模型通过 tint 颜色的 alpha，自定义几何通过 `AlphaVertexConsumer`，不再标记共享的
+  `RenderType`，所以同材质、不在选区内的实体不会跟着变淡。物品（掉落物）的 RenderType 是逐个四边形决定的、
+  多半不混合，所以 `submitItem` 改为把四边形按半透明变体分组，用 `submitCustomGeometry` 自己画（会丢失附魔光效）；
+  方块模型等少数路径仍走 `HiddenRenderTypes` 标记。
+- 粒子的类型：`ParticleEngineMixin` 在 `createParticle` 里把 `ParticleOptions` 的类型记到粒子上（`ParticleMixin` /
+  `ParticleTypeHolder`），粒子类型名单按它匹配；不经 `createParticle` 加入的粒子没有类型，只在名单为空时命中。
+- 粒子：透明度为 0 时 `mixin/particle/ParticleEngineMixin` 在 `add` 处丢弃；大于 0 时
+  `mixin/particle/SingleQuadParticleMixin` 在 `extractRotatedQuad` 里把不透明层换成同图集的半透明层，
+  并把颜色 alpha 乘上透明度（只覆盖 `SingleQuadParticle`，其它粒子类型不受影响）。
+- 实体和粒子的命中规则在 `render/RegionTargets`：只看区域类模式（选区内 / 选区外，含 LISTED 变体但不用方块名单，
+  反转同样生效），黑 / 白名单模式不影响它们。
 
 配置项本身只是"视图"，权威数据源永远是 `SelectiveRenderingManager`；
 落盘由 `ModConfig.save()` 防抖异步完成。

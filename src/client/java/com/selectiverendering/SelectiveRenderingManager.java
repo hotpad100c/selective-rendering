@@ -300,7 +300,7 @@ public final class SelectiveRenderingManager {
 			rememberSources();
 		}
 
-		Log.say("[state] loaded: mode {}, transparency {}%, {} rule(s), {} region(s), {} preset(s)", mode, transparency, RULES.size(), REGIONS.size(), PRESETS.size());
+		Log.debug("[state] loaded: mode {}, transparency {}%, {} rule(s), {} region(s), {} preset(s)", mode, transparency, RULES.size(), REGIONS.size(), PRESETS.size());
 	}
 
 	public static Mode getMode() {
@@ -317,7 +317,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] mode {}", newMode.name());
+		Log.debug("[state] mode {}", newMode.name());
 		RebuildScheduler.rebuildChunks();
 	}
 
@@ -342,7 +342,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] transparency {}%", clamped);
+		Log.debug("[state] transparency {}%", clamped);
 		RebuildScheduler.rebuildHidden();
 	}
 
@@ -391,7 +391,7 @@ public final class SelectiveRenderingManager {
 			commitAndRemember();
 		}
 
-		Log.say("[state] rule added: {}", rule.source());
+		Log.debug("[state] rule added: {}", rule.source());
 		RebuildScheduler.rebuildAfterListChange(true);
 		return true;
 	}
@@ -405,7 +405,7 @@ public final class SelectiveRenderingManager {
 			commitAndRemember();
 		}
 
-		Log.say("[state] rule removed: {}", source.trim());
+		Log.debug("[state] rule removed: {}", source.trim());
 		RebuildScheduler.rebuildAfterListChange(false);
 		return true;
 	}
@@ -509,7 +509,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] record mode {}", newMode.name());
+		Log.debug("[state] record mode {}", newMode.name());
 	}
 
 	public static RecordApplyMode getRecordApplyMode() {
@@ -530,7 +530,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] record apply mode {}", newMode.name());
+		Log.debug("[state] record apply mode {}", newMode.name());
 	}
 
 	public static boolean isInvert() {
@@ -547,7 +547,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] invert {}", value);
+		Log.debug("[state] invert {}", value);
 		RebuildScheduler.rebuildChunks();
 	}
 
@@ -572,7 +572,7 @@ public final class SelectiveRenderingManager {
 			commit();
 		}
 
-		Log.say("[state] pass through {}", value);
+		Log.debug("[state] pass through {}", value);
 	}
 
 	/** 按记录名单和过滤模式判断是否记录；空名单表示不过滤。 */
@@ -592,7 +592,7 @@ public final class SelectiveRenderingManager {
 			}
 		}
 
-		return current.recordMode() == RecordMode.LISTED ? listed : !listed;
+		return (current.recordMode() == RecordMode.LISTED) == listed;
 	}
 
 	public static String getWand() {
@@ -662,6 +662,8 @@ public final class SelectiveRenderingManager {
 		entry.entities = region.options().entities();
 		entry.particles = region.options().particles();
 		entry.rules = new ArrayList<>(region.options().ruleSources());
+		entry.entityTypes = new ArrayList<>(region.options().entityTypes());
+		entry.particleTypes = new ArrayList<>(region.options().particleTypes());
 		return entry;
 	}
 
@@ -671,7 +673,7 @@ public final class SelectiveRenderingManager {
 			return null;
 		}
 
-		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, null).withRuleSources(entry.rules));
+		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, null, null, null).withRuleSources(entry.rules).withEntityTypes(entry.entityTypes).withParticleTypes(entry.particleTypes));
 	}
 
 	private static Region toRegion(int[] values) {
@@ -715,7 +717,7 @@ public final class SelectiveRenderingManager {
 			commitAndRemember();
 		}
 
-		Log.say("[state] preset applied: {}", preset.displayName());
+		Log.debug("[state] preset applied: {}", preset.displayName());
 		RebuildScheduler.rebuildChunks();
 	}
 

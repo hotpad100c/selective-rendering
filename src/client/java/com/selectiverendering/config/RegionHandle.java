@@ -17,6 +17,15 @@ final class RegionHandle {
 		return this.current;
 	}
 
+	boolean replace(Region next) {
+		if (RegionEditor.updateRegion(this.current, next)) {
+			this.current = next;
+			return true;
+		}
+
+		return false;
+	}
+
 	void update(UnaryOperator<RegionOptions> change) {
 		Region next = this.current.withOptions(change.apply(this.current.options()));
 

@@ -1,6 +1,9 @@
 package com.selectiverendering.region;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
@@ -129,9 +132,10 @@ public record Region(BlockPos min, BlockPos max, RegionOptions options) {
 			&& pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
 	}
 
-	/** 序列化为 minX,minY,minZ:maxX,maxY,maxZ。 */
+	/** 序列化为 minX,minY,minZ:maxX,maxY,maxZ，选区别设置由{SNBT}存储。 */
 	public String toSource() {
-		return source(min) + ":" + source(max);
+		CompoundTag tag = options.toTag();
+		return source(min) + ":" + source(max) + (tag.isEmpty() ? "" : tag.toString());
 	}
 
 	@Nullable
@@ -140,14 +144,29 @@ public record Region(BlockPos min, BlockPos max, RegionOptions options) {
 			return null;
 		}
 
-		String[] corners = input.trim().split(":", 2);
+		String text = input.trim();
+		int brace = text.indexOf('{');
+		RegionOptions options = RegionOptions.DEFAULT;
+
+		if (brace >= 0) {
+			try {
+				options = RegionOptions.fromTag(TagParser.parseCompoundFully(text.substring(brace)));
+			}
+			catch (CommandSyntaxException e) {
+				return null;
+			}
+
+			text = text.substring(0, brace);
+		}
+
+		String[] corners = text.split(":", 2);
 		if (corners.length != 2) {
 			return null;
 		}
 
 		BlockPos first = corner(corners[0]);
 		BlockPos second = corner(corners[1]);
-		return first == null || second == null ? null : of(first, second);
+		return first == null || second == null ? null : of(first, second).withOptions(options);
 	}
 
 	@Nullable

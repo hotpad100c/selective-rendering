@@ -11,19 +11,23 @@ import fi.dy.masa.malilib.config.options.ConfigBase;
 public final class RegionRowConfig extends ConfigBase<RegionRowConfig> implements IConfigValue {
 	private final Region region;
 	private final int index;
-	private final int children;
 
-	public RegionRowConfig(Region region, int index, int children) {
-		super(ConfigType.STRING, region.toSource());
+	public RegionRowConfig(Region region, int index) {
+		super(ConfigType.STRING, "region");
 
 		this.region = region;
 		this.index = index;
-		this.children = children;
 	}
 
-	public int children() {
-		return this.children;
+	public int index() {
+		return this.index;
 	}
+
+	@Override
+	public String getConfigGuiDisplayName() {
+		return "";
+	}
+
 
 	public Region region() {
 		return this.region;

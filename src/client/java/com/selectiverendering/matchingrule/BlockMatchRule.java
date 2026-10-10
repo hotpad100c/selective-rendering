@@ -159,13 +159,13 @@ public final class BlockMatchRule {
 		else {
 			Identifier identifier = Identifier.tryParse(target.contains(":") ? target : "minecraft:" + target);
 			if (identifier == null) {
-				Log.say("[rule] 无法解析的方块 id，已忽略: {}", source);
+				Log.warn("[rule] Unknown block id, ignored: {}", source);
 				return null;
 			}
 
 			block = BuiltInRegistries.BLOCK.getOptional(identifier).orElse(null);
 			if (block == null) {
-				Log.say("[rule] 未知的方块 id，已忽略: {}", source);
+				Log.warn("[rule] Unknown block id，ignored: {}", source);
 				return null;
 			}
 		}
@@ -179,7 +179,7 @@ public final class BlockMatchRule {
 				}
 
 				if (block.getStateDefinition().getProperty(name) == null) {
-					Log.say("[rule] {} 上不存在状态 {}，已忽略: {}", target, name, source);
+					Log.warn("[rule] {} does not have the state {}, ignored: {}", target, name, source);
 					return null;
 				}
 			}
