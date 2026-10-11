@@ -102,7 +102,7 @@
   "selective_rendering.config.name.region_alpha": "Alpha override",
   "selective_rendering.config.comment.region_alpha": "-1 follows the global transparency. 0 to 255 is this region's own alpha: 0 is invisible, 255 is fully opaque",
   "selective_rendering.hint.region_key": "Selection key (%s)",
-  "selective_rendering.hud.region_selected": "Region #%s， %s area(s)",
+  "selective_rendering.hud.region_selected": "Region #%s, %s area(s)",
   "selective_rendering.config.name.operation_key": "Operation key",
   "selective_rendering.config.prettyName.operation_key": "Operation key",
   "selective_rendering.config.comment.operation_key": "Hold it and click a block or entity to add / remove it from the lists. Writes to the selected region's local list, or the global block list when nothing is selected",

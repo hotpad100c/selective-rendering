@@ -1,7 +1,6 @@
 plugins {
 	id("java")
 	id("maven-publish")
-	// Loom 的版本在这里写死（26.x 全是未混淆版本，用不着 loom-back-compat）。
 	id("net.fabricmc.fabric-loom") version "1.18-SNAPSHOT"
 }
 
@@ -17,7 +16,6 @@ data class McDeps(
 	val malilib: String,
 	val modmenu: String,
 	val sodium: String,
-	/** 写进 fabric.mod.json 的 minecraft 依赖范围。 */
 	val minecraftDependency: String,
 )
 
@@ -83,7 +81,6 @@ dependencies {
 
 	implementation("maven.modrinth:malilib:${deps.malilib}")
 
-	// 配置界面依赖：默认只参与编译，加 -PconfigScreen 才进运行时 classpath。
 	val configScreen = project.hasProperty("configScreen")
 	listOf(
 		"net.fabricmc.fabric-api:fabric-api:${deps.fabricApi}",
@@ -97,14 +94,11 @@ dependencies {
 	compileOnly("maven.modrinth:sodium:${deps.sodium}")
 }
 
-// MaLiLib 是必需依赖，而它的版本跟 MC 版本绑死。取构建时用的那个版本当下限，
-// 避免玩家装了别的 MC 版本对应的 MaLiLib 也能进游戏然后崩（fabric.mod.json 里写 "*" 等于不校验）。
 val malilibDependency = ">=${deps.malilib}"
 
 tasks.processResources {
 	val projectVersion = project.version.toString()
 	val minecraftDependency = deps.minecraftDependency
-	// 先拷成局部变量：lambda 里直接引用脚本级变量会让 configuration cache 无法序列化。
 	val malilibDependency = malilibDependency
 
 	inputs.property("version", projectVersion)
