@@ -27,14 +27,15 @@ public final class WandHudRenderer {
 	private static final int TEXT_DIM = 0xFFD0D0D0;
 	private static final int HINT = 0xFFC8C8C8;
 	private static final int MARGIN = 6;
-	private static final int LINE_GAP = 2;
+	private static final int LINE_GAP = 1;
 
 	private static final int SOURCE_SIZE = 32;
 	private static final int MODE_ICON = 24;
-	private static final int ICON = 14;
+	private static final int ICON = 12;
 	private static final int ICON_GAP = 2;
-	private static final int ROW = ICON + 1;
-	private static final int TARGET_ICON = 12;
+	private static final int ROW = ICON;
+	private static final int TARGET_ICON = 18;
+	private static final int SELECTED_ROW = TARGET_ICON;
 
 	private static final Identifier HOTKEY = texture("hotkey");
 	private static final Identifier MOUSE = texture("mouse");
@@ -66,7 +67,7 @@ public final class WandHudRenderer {
 		List<Hint> hints = hints();
 
 		int height = MODE_ICON + LINE_GAP
-			+ (selected == null ? 0 : ROW + LINE_GAP)
+			+ (selected == null ? 0 : SELECTED_ROW + LINE_GAP)
 			+ status.size() * (font.lineHeight + LINE_GAP)
 			+ hints.size() * ROW;
 
@@ -126,7 +127,7 @@ public final class WandHudRenderer {
 	}
 
 	private static int selectedRow(GuiGraphicsExtractor graphics, Font font, int x, int y, Region region) {
-		int swatchTop = y + (ROW - 10) / 2;
+		int swatchTop = y + (SELECTED_ROW - 10) / 2;
 		graphics.fill(x, swatchTop, x + 10, swatchTop + 10, 0xFF000000 | region.color());
 
 		Component label = Component.translatable(
@@ -136,10 +137,10 @@ public final class WandHudRenderer {
 		);
 
 		int textX = x + 14;
-		graphics.text(font, label, textX, y + (ROW - font.lineHeight) / 2, TEXT, true);
+		graphics.text(font, label, textX, y + (SELECTED_ROW - font.lineHeight) / 2, TEXT, true);
 
 		int iconX = textX + font.width(label) + 6;
-		int iconY = y + (ROW - TARGET_ICON) / 2;
+		int iconY = y + (SELECTED_ROW - TARGET_ICON) / 2;
 
 		for (String target : List.of("blocks", "entities", "particles")) {
 			boolean enabled = switch (target) {
@@ -154,7 +155,7 @@ public final class WandHudRenderer {
 			}
 		}
 
-		return y + ROW + LINE_GAP;
+		return y + SELECTED_ROW + LINE_GAP;
 	}
 
 	private static List<Component> statusLines() {
