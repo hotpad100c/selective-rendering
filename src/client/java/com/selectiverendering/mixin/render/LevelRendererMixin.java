@@ -38,12 +38,7 @@ public class LevelRendererMixin {
 		if (level != null) {
 			RetainedTerrain.prepare(level, levelRenderState.cameraRenderState, output);
 		}
-		//?} else {
-		/*ClientLevel level = Minecraft.getInstance().level;
-		if (level != null) {
-			TerrainTranslucency.emit(poseStack, collector, level, levelRenderState.cameraRenderState.pos, levelRenderState.cameraRenderState.cullFrustum);
-		}
-		*///?}
+		//?}
 	}
 
 	@Inject(method = "finalizeGizmoCollection", at = @At("TAIL"), require = 0)

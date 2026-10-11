@@ -1,17 +1,6 @@
 package com.selectiverendering.render.hiding;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.renderer.rendertype.RenderType;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.core.SectionPos;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -24,6 +13,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TerrainTranslucency {
 	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ) {
 	}
+
+	// 顶点 alpha 恒为 255，透明度改由绘制时的 ColorModulator 提供
+	public static final boolean DRAW_ALPHA = Boolean.getBoolean("selectiverendering.drawAlpha");
 
 	private static final Map<Long, List<Quad>> SECTIONS = new ConcurrentHashMap<>();
 	// 区段里用到的SPRITES，Sodium只让被渲染区段里用到的动画贴图播放，自己维护时要自己标记
@@ -43,7 +35,11 @@ public final class TerrainTranslucency {
 	}
 
 	public static void begin(long section) {
+		//? if >=26.3 {
 		BUILDER.set(new Builder(section, ShaderPackState.active()));
+		//?} else {
+		/*BUILDER.set(new Builder(section, false));
+		*///?}
 	}
 
 	public static void finish(boolean completed) {

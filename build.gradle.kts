@@ -61,6 +61,13 @@ base {
 loom {
 	splitEnvironmentSourceSets()
 
+	runs {
+		named("client") {
+			// 实验：用绘制时的 ColorModulator 提供半透明地形的 alpha，验证完删除。
+			vmArg("-Dselectiverendering.drawAlpha=true")
+		}
+	}
+
 	mods {
 		register("selective-rendering") {
 			sourceSet(sourceSets["main"])

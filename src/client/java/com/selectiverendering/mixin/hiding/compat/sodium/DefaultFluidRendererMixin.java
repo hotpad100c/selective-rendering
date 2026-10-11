@@ -168,9 +168,9 @@ public class DefaultFluidRendererMixin {
 			int red = (int) ((abgr & 0xFF) * brightness);
 			int green = (int) (((abgr >> 8) & 0xFF) * brightness);
 			int blue = (int) (((abgr >> 16) & 0xFF) * brightness);
-			colors[i] = (alpha << 24) | (red << 16) | (green << 8) | blue;
+			colors[i] = ((TerrainTranslucency.DRAW_ALPHA ? 255 : alpha) << 24) | (red << 16) | (green << 8) | blue;
 
-			lights[i] = scaleLight(vertex.light, 1.0F / (0.75F + 0.25F * alpha / 255.0F));
+			lights[i] = scaleLight(vertex.light, TerrainTranslucency.DRAW_ALPHA ? 1.0F : 1.0F / (0.75F + 0.25F * alpha / 255.0F));
 		}
 
 		int packedNormal = quad.getFaceNormal();

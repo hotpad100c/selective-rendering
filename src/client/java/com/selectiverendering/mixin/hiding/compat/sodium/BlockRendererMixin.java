@@ -111,7 +111,7 @@ public class BlockRendererMixin {
 
 		Vector3f normal = quad.faceNormal();
 		float inset = quad.getCullFace() == null ? 0.0F : CAPTURE_INSET;
-		float lightScale = 1.0F / (0.75F + 0.25F * alpha / 255.0F);
+		float lightScale = TerrainTranslucency.DRAW_ALPHA ? 1.0F : 1.0F / (0.75F + 0.25F * alpha / 255.0F);
 
 		for (int i = 0; i < 4; i++) {
 			int source = ModelQuadOrientation.NORMAL.getVertexIndex(i);
@@ -128,7 +128,7 @@ public class BlockRendererMixin {
 			int red = (int) (((color >> 16) & 0xFF) * shade);
 			int green = (int) (((color >> 8) & 0xFF) * shade);
 			int blue = (int) ((color & 0xFF) * shade);
-			colors[i] = (alpha << 24) | (red << 16) | (green << 8) | blue;
+			colors[i] = ((TerrainTranslucency.DRAW_ALPHA ? 255 : alpha) << 24) | (red << 16) | (green << 8) | blue;
 
 			lights[i] = scaleLight(quad.getLight(source), lightScale);
 		}
