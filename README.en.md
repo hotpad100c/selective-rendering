@@ -36,8 +36,8 @@ The default wand is a **breeze rod** — hold it in your hand to enable the oper
 | Middle click          | Select a corner or a region; air clears       |
 | Selection key + left  | Add a selection or remove an existing one     |
 | Selection key + right | Clip every stored selection with the current one |
-| Block key + left      | Add / remove a block id rule                  |
-| Block key + right     | Add / remove a rule for a block with states   |
+| Operation key + left  | Add / remove a block or entity (to the selected region's local list if any) |
+| Operation key + right | Block with states / item entity by item       |
 | Left Ctrl + scroll    | Cycle modes                                   |
 | Left Alt + scroll     | Move the currently selected corner            |
 
@@ -73,7 +73,7 @@ The default wand is a **breeze rod** — hold it in your hand to enable the oper
 - **Mode / invert / transparency / interact through**
 - **Block list**
 - **Selection list** (format `minX,minY,minZ:maxX,maxY,maxZ`)
-- **Block key / selection key / config key**
+- **Operation key / selection key / config key**
 - **Recorded blocks / list mode / apply as / record key**
 - **Wand** item
 - **Night vision**

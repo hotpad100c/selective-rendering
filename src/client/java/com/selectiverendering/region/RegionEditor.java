@@ -201,6 +201,50 @@ public final class RegionEditor {
 		return true;
 	}
 
+	/** 增删选区本地方块名单里的一项，返回是否是加入。 */
+	public static boolean toggleLocalRule(Region region, String source) {
+		return toggleLocal(region, source, RegionOptions::ruleSources, RegionOptions::withRuleSources);
+	}
+
+	/** 增删选区本地实体名单里的一项，返回是否是加入。 */
+	public static boolean toggleLocalEntityType(Region region, String source) {
+		return toggleLocal(region, source, RegionOptions::entityTypes, RegionOptions::withEntityTypes);
+	}
+
+	private static boolean toggleLocal(
+		Region region,
+		String source,
+		java.util.function.Function<RegionOptions, List<String>> read,
+		java.util.function.BiFunction<RegionOptions, List<String>, RegionOptions> write
+	) {
+		Region current = null;
+		List<String> entries;
+		boolean removed;
+
+		synchronized (SelectiveRenderingManager.LOCK) {
+			for (Region candidate : SelectiveRenderingManager.REGIONS) {
+				if (candidate.equals(region)) {
+					current = candidate;
+					break;
+				}
+			}
+
+			if (current == null) {
+				return false;
+			}
+
+			entries = new ArrayList<>(read.apply(current.options()));
+			removed = entries.removeIf(entry -> entry.equalsIgnoreCase(source));
+
+			if (!removed) {
+				entries.add(source);
+			}
+		}
+
+		updateRegion(current, current.withOptions(write.apply(current.options(), entries)));
+		return !removed;
+	}
+
 	/** 把一个范围从选区里独立出去，成为新的选区，保留原选区的设置。只剩一个范围时不能独立。 */
 	public static boolean detachArea(Region region, Area area) {
 		synchronized (SelectiveRenderingManager.LOCK) {
@@ -222,17 +266,19 @@ public final class RegionEditor {
 		return true;
 	}
 
-	/** 把 source 的所有范围并入 target，设置以 target 为准，名单取并集；source 随即消失。 */
-	public static boolean mergeRegion(Region source, Region target) {
+	/**
+	 * 把 source 的所有范围并入 target，设置以 target 为准，名单取并集；source 随即消失。
+	 */
+	public static void mergeRegion(Region source, Region target) {
 		if (source.equals(target)) {
-			return false;
+			return;
 		}
 
 		synchronized (SelectiveRenderingManager.LOCK) {
 			int sourceIndex = SelectiveRenderingManager.REGIONS.indexOf(source);
 			int targetIndex = SelectiveRenderingManager.REGIONS.indexOf(target);
 			if (sourceIndex < 0 || targetIndex < 0) {
-				return false;
+				return;
 			}
 
 			SelectiveRenderingManager.REGIONS.set(targetIndex, Region.merge(target, source));
@@ -246,11 +292,12 @@ public final class RegionEditor {
 		}
 
 		changed(source.areas(), source.areas(), false);
-		return true;
 	}
 
-	/** 删除指定选区并保存、重建及还原光照。 */
-	public static boolean removeRegions(List<Region> targets) {
+	/**
+	 * 删除指定选区并保存、重建及还原光照。
+	 */
+	public static void removeRegions(List<Region> targets) {
 		List<Area> dropped = new ArrayList<>();
 
 		synchronized (SelectiveRenderingManager.LOCK) {
@@ -264,7 +311,7 @@ public final class RegionEditor {
 			}
 
 			if (!any) {
-				return false;
+				return;
 			}
 
 			dropSelectionIfGone();
@@ -273,7 +320,6 @@ public final class RegionEditor {
 
 		Log.debug("[state] {} area(s) removed with their regions", dropped.size());
 		changed(dropped, dropped, false);
-		return true;
 	}
 
 	/** 返回射线命中的最近范围，未命中时返回 null。 */
@@ -302,17 +348,23 @@ public final class RegionEditor {
 		}
 	}
 
-	/** 删除射线命中的最近范围（选区的最后一个范围被删掉时选区也消失），未命中则添加当前选区。 */
-	public static boolean toggleAreaAlongRay(Vec3 start, Vec3 end) {
+	/**
+	 * 删除射线命中的最近范围（选区的最后一个范围被删掉时选区也消失），未命中则添加当前选区。
+	 */
+	public static void toggleAreaAlongRay(Vec3 start, Vec3 end) {
 		Hit hit = pickArea(start, end);
-		return hit != null ? removeArea(hit.region(), hit.area()) : addAreaFromSelection();
+		if (hit != null) {
+			removeArea(hit.region(), hit.area());
+		} else {
+			addAreaFromSelection();
+		}
 	}
 
-	public static boolean removeArea(Region region, Area area) {
+	public static void removeArea(Region region, Area area) {
 		synchronized (SelectiveRenderingManager.LOCK) {
 			int index = SelectiveRenderingManager.REGIONS.indexOf(region);
 			if (index < 0 || !region.areas().contains(area)) {
-				return false;
+				return;
 			}
 
 			List<Area> rest = new ArrayList<>(region.areas());
@@ -330,13 +382,16 @@ public final class RegionEditor {
 		}
 
 		changed(List.of(area), List.of(area), false);
-		return true;
 	}
 
-	/** 用当前双角点选区裁剪所有选区，裁出的新部分仍留在原来的选区里，保留当前角点。 */
-	public static boolean clipRegions() {
+	/**
+	 * 用当前双角点选区裁剪所有选区，裁出的新部分仍留在原来的选区里，保留当前角点。
+	 */
+	public static void clipRegions() {
 		Area cut = selection();
-		return cut != null && cut(List.of(cut), true);
+		if (cut != null) {
+			cut(List.of(cut), true);
+		}
 	}
 
 	/** 记录器的裁剪模式：用记录到的范围裁剪所有选区。 */

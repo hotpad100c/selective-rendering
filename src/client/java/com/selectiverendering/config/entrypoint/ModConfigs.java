@@ -45,7 +45,7 @@ public final class ModConfigs {
 	public static final ConfigBoolean INVERT = new ConfigBoolean("invert", SelectiveRenderingManager.DEFAULT_INVERT).apply(KEY);
 	public static final TransparencyConfig TRANSPARENCY = new TransparencyConfig("transparency").apply(KEY);
 	public static final SuggestingStringList RULES = new SuggestingStringList("items", SuggestKind.BLOCK).apply(KEY);
-	public static final ConfigHotkey BLOCKS_KEY = new ConfigHotkey("blocks_key", "LEFT_ALT", KeybindSettings.MODIFIER_INGAME).apply(KEY);
+	public static final ConfigHotkey OPERATION_KEY = new ConfigHotkey("operation_key", "LEFT_ALT", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey REGION_KEY = new ConfigHotkey("region_key", "LEFT_CONTROL", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigString WAND = new ConfigString("wand", SelectiveRenderingManager.DEFAULT_WAND).apply(KEY);
@@ -61,7 +61,7 @@ public final class ModConfigs {
 		INVERT,
 		TRANSPARENCY,
 		RULES,
-		BLOCKS_KEY,
+		OPERATION_KEY,
 		REGION_KEY,
 		OPEN_CONFIG_GUI,
 		WAND,
@@ -73,7 +73,7 @@ public final class ModConfigs {
 		RECORD_KEY
 	);
 
-	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, BLOCKS_KEY, RECORD_KEY);
+	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, OPERATION_KEY, RECORD_KEY);
 	// 仅保存键位；开关值由 manager 保存。
 	private static final List<IHotkey> TOGGLE_LIST = List.of(PASS_THROUGH);
 
@@ -160,6 +160,10 @@ public final class ModConfigs {
 			return;
 		}
 
+		if (stored.has("blocks_key") && !stored.has("operation_key")) {
+			stored.add("operation_key", stored.get("blocks_key"));
+		}
+
 		JsonObject holder = new JsonObject();
 		holder.add(HOTKEY_CATEGORY, stored);
 		ConfigUtils.readConfigBase(holder, HOTKEY_CATEGORY, HOTKEY_LIST);
@@ -241,7 +245,7 @@ public final class ModConfigs {
 			manager.addKeybindToMap(OPEN_CONFIG_GUI.getKeybind());
 			manager.addKeybindToMap(RECORD_KEY.getKeybind());
 			manager.addKeybindToMap(REGION_KEY.getKeybind());
-			manager.addKeybindToMap(BLOCKS_KEY.getKeybind());
+			manager.addKeybindToMap(OPERATION_KEY.getKeybind());
 			manager.addKeybindToMap(PASS_THROUGH.getKeybind());
 		}
 
@@ -250,7 +254,7 @@ public final class ModConfigs {
 			manager.addHotkeysForCategory(
 				MOD_NAME,
 				SelectiveRendering.MOD_ID + ".hotkeys.category.main",
-				List.<IHotkey>of(RECORD_KEY, REGION_KEY, BLOCKS_KEY, PASS_THROUGH, OPEN_CONFIG_GUI)
+				List.<IHotkey>of(RECORD_KEY, REGION_KEY, OPERATION_KEY, PASS_THROUGH, OPEN_CONFIG_GUI)
 			);
 		}
 	}

@@ -91,8 +91,15 @@ public class WandActions {
                 RegionEditor.clipRegions();
                 ci.cancel();
             }
-
             return;
+        }
+
+        if (ModHotkeys.operationHeld()) {
+        	int button = buttonInfo.button();
+        	if ((button == Platform.MOUSE_LEFT || button == Platform.MOUSE_RIGHT) && OperationActions.operate(minecraft, camera, button == Platform.MOUSE_RIGHT)) {
+        		ci.cancel();
+        	}
+        	return;
         }
 
         BlockHitResult hit = CameraRay.pick(minecraft, camera, MAX_TRACE_DISTANCE);
@@ -100,18 +107,6 @@ public class WandActions {
             return;
         }
 
-        if (ModHotkeys.blocksHeld()) {
-            if (buttonInfo.button() == Platform.MOUSE_LEFT) {
-                toggleBlockId(hit, minecraft);
-                ci.cancel();
-            }
-            else if (buttonInfo.button() == Platform.MOUSE_RIGHT) {
-                toggleBlockStates(hit, minecraft);
-                ci.cancel();
-            }
-
-            return;
-        }
 
         if (buttonInfo.button() == Platform.MOUSE_LEFT) {
             RegionEditor.setCorner(0, hit.getBlockPos());
@@ -144,56 +139,5 @@ public class WandActions {
         }
 
         return Direction.fromYRot(camera.yRot());
-    }
-
-    private static void toggleBlockId(BlockHitResult hit, Minecraft minecraft) {
-        toggleRuleAt(hit, minecraft, false);
-    }
-
-    private static void toggleBlockStates(BlockHitResult hit, Minecraft minecraft) {
-        toggleRuleAt(hit, minecraft, true);
-    }
-
-    /** 增删命中方块的规则；withStates 决定是否包含完整状态。 */
-    private static void toggleRuleAt(BlockHitResult hit, Minecraft minecraft, boolean withStates) {
-        assert minecraft.level != null;
-        BlockState state = minecraft.level.getBlockState(hit.getBlockPos());
-        if (state.isAir()) {
-            return;
-        }
-
-        Block block = state.getBlock();
-        String source = BuiltInRegistries.BLOCK.getKey(block).toString();
-
-        if (withStates && !block.getStateDefinition().getProperties().isEmpty()) {
-            StringBuilder builder = new StringBuilder(source).append('[');
-            boolean first = true;
-
-            for (Property<?> property : block.getStateDefinition().getProperties()) {
-                if (!first) {
-                    builder.append(',');
-                }
-
-                first = false;
-                builder.append(property.getName()).append('=').append(value(state, property));
-            }
-
-            source = builder.append(']').toString();
-        }
-
-        boolean listed = SelectiveRenderingManager.hasRule(source);
-        if (listed) {
-            SelectiveRenderingManager.removeRule(source);
-        }
-        else {
-            SelectiveRenderingManager.addRule(source);
-        }
-
-        BlockListMessage.show(source, !listed);
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static String value(BlockState state, Property<?> property) {
-        return String.valueOf(state.getValue((Property) property));
     }
 }

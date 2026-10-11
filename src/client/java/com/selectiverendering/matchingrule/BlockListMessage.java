@@ -13,6 +13,7 @@ public final class BlockListMessage {
 
 	private static final int ADDED = 0x0080FF80;
 	private static final int REMOVED = 0x00FF8080;
+	private static final int NOTE = 0x00FFE060;
 	private static final int TEXT = 0x00FFFFFF;
 
 	private static String sign = "";
@@ -32,6 +33,13 @@ public final class BlockListMessage {
 		sign = added ? "+ " : "- ";
 		BlockListMessage.rule = rule;
 		signColor = added ? ADDED : REMOVED;
+		shownAt = now();
+	}
+
+	public static void note(String text) {
+		sign = "! ";
+		BlockListMessage.rule = text;
+		signColor = NOTE;
 		shownAt = now();
 	}
 

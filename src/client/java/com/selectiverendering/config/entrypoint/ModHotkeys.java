@@ -13,8 +13,8 @@ public final class ModHotkeys {
 		return ModConfigs.REGION_KEY.getKeybind().isKeybindHeld();
 	}
 
-	public static boolean blocksHeld() {
-		return ModConfigs.BLOCKS_KEY.getKeybind().isKeybindHeld();
+	public static boolean operationHeld() {
+		return ModConfigs.OPERATION_KEY.getKeybind().isKeybindHeld();
 	}
 
 	public static String regionKeyName() {
@@ -22,8 +22,8 @@ public final class ModHotkeys {
 		return names(keybind.getKeys(), keybind.getKeysDisplayString());
 	}
 
-	public static String blocksKeyName() {
-		var keybind = ModConfigs.BLOCKS_KEY.getKeybind();
+	public static String operationKeyName() {
+		var keybind = ModConfigs.OPERATION_KEY.getKeybind();
 		return names(keybind.getKeys(), keybind.getKeysDisplayString());
 	}
 
@@ -35,7 +35,7 @@ public final class ModHotkeys {
 		StringBuilder names = new StringBuilder();
 
 		for (int key : keys) {
-			if (names.length() > 0) {
+			if (!names.isEmpty()) {
 				names.append(" + ");
 			}
 

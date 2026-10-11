@@ -5,6 +5,7 @@ import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.SelectiveRenderingManager.Mode;
 import com.selectiverendering.config.entrypoint.ModConfigScreen;
 import com.selectiverendering.config.entrypoint.ModHotkeys;
+import com.selectiverendering.interaction.OperationActions;
 import com.selectiverendering.matchingrule.BlockListMessage;
 import com.selectiverendering.recording.BlockChangeRecorder;
 import com.selectiverendering.region.Region;
@@ -192,7 +193,7 @@ public final class WandHudRenderer {
 		List<Hint> hints = new ArrayList<>();
 
 		String region = ModHotkeys.regionKeyName();
-		String blocks = ModHotkeys.blocksKeyName();
+		String operation = ModHotkeys.operationKeyName();
 		String config = ModConfigScreen.configKeyName();
 		String record = ModConfigScreen.recordKeyName();
 
@@ -203,9 +204,10 @@ public final class WandHudRenderer {
 			return hints;
 		}
 
-		if (ModHotkeys.blocksHeld()) {
-			hints.add(Hint.of(Component.translatable(prefix + "block_id"), HOTKEY, MOUSE_LEFT));
-			hints.add(Hint.of(Component.translatable(prefix + "block_state"), HOTKEY, MOUSE_RIGHT));
+		if (ModHotkeys.operationHeld()) {
+			String scope = OperationActions.scope(SelectiveRenderingManager.selectedRegion());
+			hints.add(Hint.of(Component.translatable(prefix + "operation_left", scope), HOTKEY, MOUSE_LEFT));
+			hints.add(Hint.of(Component.translatable(prefix + "operation_right", scope), HOTKEY, MOUSE_RIGHT));
 			hints.add(Hint.of(Component.translatable(prefix + "select_corner"), MOUSE_MIDDLE));
 			hints.add(Hint.of(Component.translatable(prefix + "move_corner"), HOTKEY, MOUSE));
 			return hints;
@@ -215,7 +217,7 @@ public final class WandHudRenderer {
 		hints.add(Hint.of(Component.translatable(prefix + "corner2"), MOUSE_RIGHT));
 		hints.add(Hint.of(Component.translatable(prefix + "select_corner"), MOUSE_MIDDLE));
 		hints.add(Hint.of(Component.translatable(prefix + "region_key", region), HOTKEY));
-		hints.add(Hint.of(Component.translatable(prefix + "block_key", blocks), HOTKEY));
+		hints.add(Hint.of(Component.translatable(prefix + "operation_key", operation), HOTKEY));
 
 		if (record != null) {
 			hints.add(Hint.of(Component.translatable(prefix + "record", record), HOTKEY));

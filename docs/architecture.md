@@ -301,5 +301,14 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 
 手持魔杖时 `WandHudRenderer` 在左下角从上到下画：渲染模式图标 + 名称（反转时标注）、选中的选区（颜色块、序号、范围数、
 已启用的方块 / 实体 / 粒子图标）、角点和记录状态文字、带图标的操作提示（鼠标左 / 中 / 右键、滚轮、热键图标，
-按住选区键或方块键时只列对应的组合）。图标在 `assets/selective_rendering/textures/gui/`，都是 32×32，
+按住选区键或操作键时只列对应的组合）。图标在 `assets/selective_rendering/textures/gui/`，都是 32×32，
 用 `GuiGraphicsExtractor.blit` 带缩放的重载画成需要的大小；模式到图标的对应关系在 `WandHudRenderer.modeIcon`。
+
+---
+
+## 操作键
+
+`OperationActions`：按住操作键（原方块键，默认左 Alt，旧配置里的 `blocks_key` 会迁移）点左 / 右键，取视线上最近的方块或实体
+加入或移出名单。选中了选区就写入该选区的本地名单（`RegionEditor.toggleLocalRule / toggleLocalEntityType`），否则方块写入全局名单；
+实体没有全局名单，未选中选区时只提示。右键：方块带完整状态，物品实体带 `{Item:{id:..}}`。消息和 HUD 提示都带括号标出写入的名单。
+
