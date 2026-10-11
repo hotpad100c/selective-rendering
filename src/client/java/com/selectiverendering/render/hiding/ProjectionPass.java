@@ -1,5 +1,6 @@
 package com.selectiverendering.render.hiding;
 
+import net.minecraft.core.BlockPos;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -125,7 +126,12 @@ public final class ProjectionPass {
 								}
 
 								poseStack.pushPose();
-								poseStack.translate(area.offsetX(), area.offsetY(), area.offsetZ());
+								BlockPos blockPos = state.blockPos;
+								poseStack.translate(
+									blockPos.getX() + area.offsetX() - cameraPos.x,
+									blockPos.getY() + area.offsetY() - cameraPos.y,
+									blockPos.getZ() + area.offsetZ() - cameraPos.z
+								);
 								blockEntities.submit(state, poseStack, collector, camera);
 								poseStack.popPose();
 							}

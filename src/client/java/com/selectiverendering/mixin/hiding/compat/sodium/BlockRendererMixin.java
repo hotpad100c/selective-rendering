@@ -76,7 +76,7 @@ public class BlockRendererMixin {
 	@Inject(method = "bufferQuad", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onBufferQuad(MutableQuadViewImpl quad, float[] brightnesses, Material material, CallbackInfo ci) {
 		if (this.selectiveRendering$pos != null && TerrainTranslucency.projecting(this.selectiveRendering$pos)) {
-			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false));
+			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false, material.pass.isTranslucent()));
 			TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
 		}
 
@@ -118,12 +118,12 @@ public class BlockRendererMixin {
 	@Unique
 	private void selectiveRendering$capture(MutableQuadViewImpl quad, float[] brightnesses, int alpha) {
 		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
-		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true));
+		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true));
 	}
 
 	/** 把 Sodium 的一个四边形转成区段内坐标的四边形；capture 为真时边界面向内收，透明度跟随全局。 */
 	@Unique
-	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture) {
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture, boolean translucent) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -152,7 +152,7 @@ public class BlockRendererMixin {
 			lights[i] = quad.getLight(source);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
 	}
 
 	@Unique

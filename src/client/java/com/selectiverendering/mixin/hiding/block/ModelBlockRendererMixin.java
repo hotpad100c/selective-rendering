@@ -108,6 +108,12 @@ public class ModelBlockRendererMixin {
 			return;
 		}
 
+		BlockPos origin = selectiveRendering$blockPos.get();
+		if (origin != null && TerrainTranslucency.projectionBoundary(origin, neighbourPos)) {
+			cir.setReturnValue(true);
+			return;
+		}
+
 		boolean hidden = selectiveRendering$blockAlpha.get() >= 0;
 
 		BlockState neighbourState = level.getBlockState(neighbourPos);

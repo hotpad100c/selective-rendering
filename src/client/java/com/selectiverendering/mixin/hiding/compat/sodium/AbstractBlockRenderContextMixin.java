@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.AlphaGetter;
 import com.selectiverendering.render.hiding.BlockRenderContextAccess;
@@ -56,6 +57,11 @@ public class AbstractBlockRenderContextMixin implements BlockRenderContextAccess
 		}
 
 		if (level == null || state == null || pos == null) {
+			return;
+		}
+
+		if (TerrainTranslucency.projectionBoundary(pos, BlockPosScratch.offset(pos, direction))) {
+			cir.setReturnValue(true);
 			return;
 		}
 

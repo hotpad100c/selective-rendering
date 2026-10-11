@@ -23,14 +23,24 @@ public class PreparedFrameMixin {
 	private SubmitNodeStorage submitNodeStorage;
 
 	//? if >=26.3 {
+	@Inject(method = "executeSolid", at = @At("HEAD"))
+	private void selectiveRendering$drawSolidTerrain(RenderPass pass, CallbackInfo ci) {
+		RetainedTerrain.drawSolid(pass, this.submitNodeStorage);
+	}
+
 	@Inject(method = "executeTranslucent", at = @At("HEAD"))
 	private void selectiveRendering$drawTranslucentTerrain(RenderPass pass, CallbackInfo ci) {
-		RetainedTerrain.draw(pass, this.submitNodeStorage);
+		RetainedTerrain.drawTranslucent(pass, this.submitNodeStorage);
 	}
 	//?} else {
-	/*@Inject(method = "executeTranslucent", at = @At("HEAD"))
+	/*@Inject(method = "executeSolid", at = @At("HEAD"))
+	private void selectiveRendering$drawSolidTerrain(CallbackInfo ci) {
+		RetainedTerrain.drawSolid(this.submitNodeStorage);
+	}
+
+	@Inject(method = "executeTranslucent", at = @At("HEAD"))
 	private void selectiveRendering$drawTranslucentTerrain(CallbackInfo ci) {
-		RetainedTerrain.draw(this.submitNodeStorage);
+		RetainedTerrain.drawTranslucent(this.submitNodeStorage);
 	}
 	*///?}
 }
@@ -41,9 +51,14 @@ public class PreparedFrameMixin {
 	@org.spongepowered.asm.mixin.Final
 	private SubmitNodeStorage submitNodeStorage;
 
+	@Inject(method = "renderSolidFeatures", at = @At("HEAD"))
+	private void selectiveRendering$drawSolidTerrain(CallbackInfo ci) {
+		RetainedTerrain.drawSolid(this.submitNodeStorage);
+	}
+
 	@Inject(method = "renderTranslucentFeatures", at = @At("HEAD"))
 	private void selectiveRendering$drawTranslucentTerrain(CallbackInfo ci) {
-		RetainedTerrain.draw(this.submitNodeStorage);
+		RetainedTerrain.drawTranslucent(this.submitNodeStorage);
 	}
 }
 *///?}

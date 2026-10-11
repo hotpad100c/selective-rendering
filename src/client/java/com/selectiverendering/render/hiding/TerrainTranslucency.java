@@ -13,14 +13,12 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class TerrainTranslucency {
 	// alpha 是截流时的透明度，global 表示它等于当时的全局透明度（之后跟随配置变化，不用重建）。
-	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global) {
+	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global, boolean translucent) {
 	}
 
 	/** 投影用的四边形按（范围, 区段）存放：坐标仍然是区段内坐标，投影后的位置就是区段原点加位移。 */
 	public record ProjectionKey(String area, long section) {
 	}
-
-	private static final int FULL_BRIGHT = 0xF000F0;
 
 	private static final Map<ProjectionKey, List<Quad>> PROJECTED = new ConcurrentHashMap<>();
 	private static final Map<ProjectionKey, Set<TextureAtlasSprite>> PROJECTED_SPRITES = new ConcurrentHashMap<>();
@@ -66,9 +64,11 @@ public final class TerrainTranslucency {
 			}
 			else {
 				PROJECTED_SPRITES.put(key, builder.sprites);
-				RetainedTerrain.prebuild(key, projected);
 				PROJECTED.put(key, projected);
 			}
+
+			// 范围里有区段重新编译过，方块可能变了，投影的光照要重算。
+			ProjectionLight.invalidate(area.key());
 		}
 
 		if (builder.quads.isEmpty()) {
@@ -103,6 +103,22 @@ public final class TerrainTranslucency {
 		return false;
 	}
 
+	/** 方块在某个投影的源范围里，而邻居不在：这个面朝着范围外，投影时需要它，不能因为外面有方块就被剔除。 */
+	public static boolean projectionBoundary(BlockPos pos, BlockPos neighbour) {
+		Builder builder = BUILDER.get();
+		if (builder == null) {
+			return false;
+		}
+
+		for (ProjectionAreas.Active area : builder.areas) {
+			if (area.contains(pos) && !area.contains(neighbour)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/** 把方块的一个四边形（区段内坐标）复制给包含它的每个投影范围。 */
 	public static void addProjected(BlockPos pos, Quad quad) {
 		Builder builder = BUILDER.get();
@@ -110,13 +126,9 @@ public final class TerrainTranslucency {
 			return;
 		}
 
-		// 投影出来的内容不需要光照：目的地的光照和它没有关系，源位置可能很暗，统一全亮。
-		Quad lit = new Quad(quad.positions(), quad.uvs(), quad.colors(), new int[]{FULL_BRIGHT, FULL_BRIGHT, FULL_BRIGHT, FULL_BRIGHT},
-			quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global());
-
 		for (ProjectionAreas.Active area : builder.areas) {
 			if (area.contains(pos)) {
-				builder.projections.computeIfAbsent(area.key(), ignored -> new ArrayList<>()).add(lit);
+				builder.projections.computeIfAbsent(area.key(), ignored -> new ArrayList<>()).add(quad);
 			}
 		}
 	}

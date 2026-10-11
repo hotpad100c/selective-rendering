@@ -1,5 +1,7 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import net.minecraft.client.renderer.chunk.ChunkSectionLayer;
+import net.minecraft.client.Minecraft;
 import com.selectiverendering.render.hiding.MovingBlockRenderContext;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.VanillaCapture;
@@ -33,6 +35,10 @@ public class FluidRendererMixin {
 	@Unique
     private static final ThreadLocal<BlockPos> POS = new ThreadLocal<>();
 
+	/** 当前流体是否属于半透明，投影时用来选管线。 */
+	@Unique
+	private static final ThreadLocal<Boolean> TRANSLUCENT_LAYER = ThreadLocal.withInitial(() -> false);
+
 	/** 当前流体渲染使用的世界数据，供邻居判定读取。 */
 	@Unique
     private static final ThreadLocal<BlockGetter> LEVEL = new ThreadLocal<>();
@@ -42,6 +48,7 @@ public class FluidRendererMixin {
 		int alpha = MovingBlockRenderContext.alpha() != -1 ? -1 : AlphaGetter.getFluidAlpha(state, pos);
 		ALPHA.set(alpha);
 		POS.set(pos);
+		TRANSLUCENT_LAYER.set(Minecraft.getInstance().getModelManager().getFluidStateModelSet().get(fluidState).layer() == ChunkSectionLayer.TRANSLUCENT);
 		LEVEL.set(level);
 
 		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
@@ -127,7 +134,7 @@ public class FluidRendererMixin {
 	private void selectiveRendering$captureVertex(VertexConsumer consumer, float x, float y, float z, int color, float u, float v, int light, CallbackInfo ci) {
 		BlockPos fluidPos = POS.get();
 		if (fluidPos != null && MovingBlockRenderContext.alpha() == -1 && TerrainTranslucency.projecting(fluidPos)) {
-			VanillaCapture.projectedFluidVertex(fluidPos, x, y, z, color, u, v, light);
+			VanillaCapture.projectedFluidVertex(fluidPos, x, y, z, color, u, v, light, TRANSLUCENT_LAYER.get());
 		}
 
 		int alpha = ALPHA.get();

@@ -131,7 +131,7 @@ public class DefaultFluidRendererMixin {
 		return !neighbourState.getFluidState().getType().isSame(ownState.getFluidState().getType());
 	}
 
-	@ModifyVariable(method = "writeQuad", at = @At("HEAD"), ordinal = 0)
+	@ModifyVariable(method = "writeQuad", at = @At("HEAD"), ordinal = 0, argsOnly = true)
 	private Material selectiveRendering$useTranslucentMaterial(Material material) {
 		int alpha = selectiveRendering$alpha;
 		return alpha > 0 && alpha < 255 ? DefaultMaterials.TRANSLUCENT : material;
@@ -146,7 +146,7 @@ public class DefaultFluidRendererMixin {
 	private void selectiveRendering$captureQuad(ChunkModelBuilder builder, TranslucentGeometryCollector collector, Material material, BlockPos pos, ModelQuadView quad, ModelQuadFacing facing, boolean shade, CallbackInfo ci) {
 		BlockPos world = selectiveRendering$pos;
 		if (world != null && TerrainTranslucency.projecting(world)) {
-			TerrainTranslucency.addProjected(world, this.selectiveRendering$buildQuad(quad, 255, false));
+			TerrainTranslucency.addProjected(world, this.selectiveRendering$buildQuad(quad, 255, false, material.pass.isTranslucent()));
 			TerrainTranslucency.addSprite(quad.getSprite());
 		}
 
@@ -155,13 +155,13 @@ public class DefaultFluidRendererMixin {
 			return;
 		}
 
-		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, alpha, true));
+		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, alpha, true, true));
 		TerrainTranslucency.addSprite(quad.getSprite());
 		ci.cancel();
 	}
 
 	@Unique
-	private TerrainTranslucency.Quad selectiveRendering$buildQuad(ModelQuadView quad, int alpha, boolean capture) {
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(ModelQuadView quad, int alpha, boolean capture, boolean translucent) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -187,7 +187,7 @@ public class DefaultFluidRendererMixin {
 		}
 
 		int packedNormal = quad.getFaceNormal();
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

@@ -94,6 +94,11 @@ public final class RetainedTerrain {
 
 	private static final List<GpuBuffer> GRAVEYARD = new ArrayList<>();
 	private static final Map<Object, Section> SECTIONS = new HashMap<>();
+	// 按投影自己的光照重算过的四边形；源四边形或光照场变了才重算。
+	private record Lit(List<TerrainTranslucency.Quad> source, int fieldVersion, List<TerrainTranslucency.Quad> quads) {
+	}
+
+	private static final Map<TerrainTranslucency.ProjectionKey, Lit> LIT = new HashMap<>();
 	// 后台线程在区块编译完成时就把顶点数据建好放进来，渲染线程只负责上传。
 	private static final Map<Object, Pending> PENDING = new ConcurrentHashMap<>();
 
@@ -108,6 +113,7 @@ public final class RetainedTerrain {
 		final int indexCount;
 		final int alpha;
 		final boolean global;
+		final boolean translucent;
 		final float minX, minY, minZ, maxX, maxY, maxZ;
 		// 每个四边形的中心（相对区段原点），用来按到相机的距离排序。
 		final float[] centroids;
@@ -120,7 +126,8 @@ public final class RetainedTerrain {
 		float jobX, jobY, jobZ;
 		boolean retired;
 
-		BufferPice(GpuBuffer buffer, int indexCount, int alpha, boolean global, float[] bounds, float[] centroids) {
+		BufferPice(GpuBuffer buffer, int indexCount, int alpha, boolean global, boolean translucent, float[] bounds, float[] centroids) {
+			this.translucent = translucent;
 			this.buffer = buffer;
 			this.indexCount = indexCount;
 			this.alpha = alpha;
@@ -139,7 +146,7 @@ public final class RetainedTerrain {
 	}
 
 	// CPU 侧已经建好的一组顶点数据，等渲染线程上传。
-	private record PieceData(ByteBuffer vertices, int indexCount, int alpha, boolean global, float[] bounds, float[] centroids) {
+	private record PieceData(ByteBuffer vertices, int indexCount, int alpha, boolean global, boolean translucent, float[] bounds, float[] centroids) {
 	}
 
 	private record Pending(List<TerrainTranslucency.Quad> source, Future<List<PieceData>> future) {
@@ -158,6 +165,15 @@ public final class RetainedTerrain {
 
 	public static boolean alphaFollowsDraw() {
 		return true;
+	}
+
+	// 不透明和镂空的方块：不走半透明混合，光影里才能像普通方块一样和天空、地形正确合成。
+	private static RenderType solidType(boolean shaders) {
+		//? if >=26.3 {
+		return shaders ? RenderTypes.entityCutoutCull(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.cutoutMovingBlock();
+		//?} else {
+		/*return shaders ? RenderTypes.entityCutout(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.cutoutMovingBlock();
+		*///?}
 	}
 
 	// 开着光影时用半透明实体管线，没开光影时用原版区块的半透明管线
@@ -202,6 +218,8 @@ public final class RetainedTerrain {
 		if (level != lastLevel) {
 			releaseAll();
 			TerrainTranslucency.clear();
+			ProjectionLight.clear();
+			LIT.clear();
 			lastLevel = level;
 		}
 
@@ -265,11 +283,26 @@ public final class RetainedTerrain {
 				continue;
 			}
 
-			// 投影的四边形仍是区段内坐标，投影后的位置就是区段原点加上位移。
+			// 投影的四边形仍是区段内坐标，投影后的位置就是区段原点加上位移；光照按投影自己的光照场重算。
+			ProjectionLight.Field field = ProjectionLight.field(level, active);
+			if (field == null) {
+				continue;
+			}
+
 			SectionPos section = SectionPos.of(entry.getKey().section());
-			sources.add(new Source(entry.getKey(), entry.getValue(), TerrainTranslucency.projectedSprites(entry.getKey()),
+			Lit lit = LIT.get(entry.getKey());
+
+			if (lit == null || lit.source() != entry.getValue() || lit.fieldVersion() != field.version) {
+				lit = new Lit(entry.getValue(), field.version,
+					ProjectionLight.relight(entry.getValue(), section.minBlockX(), section.minBlockY(), section.minBlockZ(), active.area(), field));
+				LIT.put(entry.getKey(), lit);
+			}
+
+			sources.add(new Source(entry.getKey(), lit.quads(), TerrainTranslucency.projectedSprites(entry.getKey()),
 				section.minBlockX() + active.offsetX(), section.minBlockY() + active.offsetY(), section.minBlockZ() + active.offsetZ(), 16, 16, 16));
 		}
+
+		LIT.keySet().retainAll(projected.keySet());
 
 		List<Placed> placedList = new ArrayList<>();
 		Vec3 position = camera.pos;
@@ -403,13 +436,23 @@ public final class RetainedTerrain {
 		*///?}
 	}
 
+	// 不透明的投影方块在实体的“实心”阶段画，光影包才会把它们当作普通的不透明几何体（深度、天空合成都正确）；
+	// 半透明的在半透明阶段画。
 	//? if >=26.3 {
-	public static void draw(RenderPass pass, Object storage) {
-		drawFrame(pass, storage);
+	public static void drawSolid(RenderPass pass, Object storage) {
+		drawFrame(pass, storage, false);
+	}
+
+	public static void drawTranslucent(RenderPass pass, Object storage) {
+		drawFrame(pass, storage, true);
 	}
 	//?} else {
-	/*public static void draw(Object storage) {
-		drawFrame(null, storage);
+	/*public static void drawSolid(Object storage) {
+		drawFrame(null, storage, false);
+	}
+
+	public static void drawTranslucent(Object storage) {
+		drawFrame(null, storage, true);
 	}
 	*///?}
 
@@ -421,31 +464,46 @@ public final class RetainedTerrain {
 		*///?}
 	}
 
-	private static void drawFrame(Object pass, Object storage) {
+	private static void drawFrame(Object pass, Object storage, boolean translucentPhase) {
 		Frame frame = current;
 		if (frame == null || storage != currentStorage) {
 			return;
 		}
 
-		current = null;
+		// 实心阶段先于半透明阶段，等半透明阶段画完这一帧的数据才作废。
+		if (translucentPhase) {
+			current = null;
+		}
+
+		List<Placed> subset = new ArrayList<>();
+		for (Placed placed : frame.placed()) {
+			if (placed.bufferPice().translucent == translucentPhase) {
+				subset.add(placed);
+			}
+		}
+
+		if (subset.isEmpty()) {
+			return;
+		}
 
 		//? if >=26.2 {
 		// 透明度由 ColorModulator 提供，顶点 alpha 恒为 255。
-		PreparedRenderType base = renderType(frame.shaders()).prepare();
+		PreparedRenderType translucentBase = renderType(frame.shaders()).prepare();
+		PreparedRenderType solidBase = solidType(frame.shaders()).prepare();
 		Matrix4f texture = new Matrix4f();
 		int globalAlpha = SelectiveRenderingManager.config().alpha();
 
-		for (Placed placed : frame.placed()) {
+		for (Placed placed : subset) {
 			BufferPice piece = placed.bufferPice();
 			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
 
 			Matrix4f modelView = new Matrix4f(frame.view()).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
 			GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture);
 
-			drawPiece(withTransform(base, transform), pass, piece);
+			drawPiece(withTransform(piece.translucent ? translucentBase : solidBase, transform), pass, piece);
 		}
 		//?} else {
-		/*drawImmediate(frame);
+		/*drawImmediate(frame, subset);
 		*///?}
 	}
 
@@ -481,9 +539,10 @@ public final class RetainedTerrain {
 	}
 	//?} else {
 	/*// 26.1.2 没有 PreparedRenderType：按 RenderType.draw 的做法自己开一个渲染通道，一次画完所有区段。
-	private static void drawImmediate(Frame frame) {
-		RenderType type = renderType(frame.shaders());
-		RenderSetup state = ((RenderTypeAccessor) (Object) type).selectiveRendering$state();
+	private static void drawImmediate(Frame frame, List<Placed> subset) {
+		RenderType translucentType = renderType(frame.shaders());
+		RenderType solidType = solidType(frame.shaders());
+		RenderType type = translucentType;
 
 		RenderTarget target = type.outputTarget().getRenderTarget();
 		GpuTextureView color = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
@@ -498,7 +557,7 @@ public final class RetainedTerrain {
 
 		// 写 DynamicTransforms 要映射缓冲，必须在打开渲染通道之前全部写好。
 		List<GpuBufferSlice> transforms = new ArrayList<>();
-		for (Placed placed : frame.placed()) {
+		for (Placed placed : subset) {
 			BufferPice piece = placed.bufferPice();
 			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
 
@@ -511,8 +570,6 @@ public final class RetainedTerrain {
 		try (RenderPass renderPass = depth != null
 			? encoder.createRenderPass(() -> "selective_rendering translucent terrain", color, OptionalInt.empty(), depth, OptionalDouble.empty())
 			: encoder.createRenderPass(() -> "selective_rendering translucent terrain", color, OptionalInt.empty())) {
-			renderPass.setPipeline(type.pipeline());
-
 			ScissorState scissor = RenderSystem.getScissorStateForRenderTypeDraws();
 			if (scissor.enabled()) {
 				renderPass.enableScissor(scissor.x(), scissor.y(), scissor.width(), scissor.height());
@@ -520,9 +577,12 @@ public final class RetainedTerrain {
 
 			RenderSystem.bindDefaultUniforms(renderPass);
 
-			for (int index = 0; index < frame.placed().size(); index++) {
-				BufferPice piece = frame.placed().get(index).bufferPice();
+			for (int index = 0; index < subset.size(); index++) {
+				BufferPice piece = subset.get(index).bufferPice();
+				RenderType pieceType = piece.translucent ? translucentType : solidType;
+				RenderSetup state = ((RenderTypeAccessor) (Object) pieceType).selectiveRendering$state();
 
+				renderPass.setPipeline(pieceType.pipeline());
 				renderPass.setUniform("DynamicTransforms", transforms.get(index));
 				renderPass.setVertexBuffer(0, piece.buffer);
 
@@ -643,7 +703,7 @@ public final class RetainedTerrain {
 		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
 
 		for (TerrainTranslucency.Quad quad : quads) {
-			long key = quad.global() ? -1L : quad.alpha();
+			long key = (quad.global() ? -1L : quad.alpha()) * 2 + (quad.translucent() ? 1 : 0);
 			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
 		}
 
@@ -660,7 +720,7 @@ public final class RetainedTerrain {
 		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
 
 		for (TerrainTranslucency.Quad quad : quads) {
-			long key = quad.global() ? -1L : quad.alpha();
+			long key = (quad.global() ? -1L : quad.alpha()) * 2 + (quad.translucent() ? 1 : 0);
 			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
 		}
 
@@ -678,7 +738,7 @@ public final class RetainedTerrain {
 					copy.flip();
 
 					TerrainTranslucency.Quad first = group.get(0);
-					result.add(new PieceData(copy, mesh.drawState().indexCount(), first.alpha(), first.global(), bounds, centroids));
+					result.add(new PieceData(copy, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), bounds, centroids));
 				}
 			}
 		}
@@ -692,7 +752,7 @@ public final class RetainedTerrain {
 
 		for (PieceData piece : data) {
 			GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, piece.vertices());
-			pieces.add(new BufferPice(buffer, piece.indexCount(), piece.alpha(), piece.global(), piece.bounds(), piece.centroids()));
+			pieces.add(new BufferPice(buffer, piece.indexCount(), piece.alpha(), piece.global(), piece.translucent(), piece.bounds(), piece.centroids()));
 		}
 
 		return new Section(quads, pieces);
@@ -731,7 +791,7 @@ public final class RetainedTerrain {
 			try (MeshData mesh = builder.buildOrThrow()) {
 				GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, mesh.vertexBuffer());
 				TerrainTranslucency.Quad first = quads.get(0);
-				return new BufferPice(buffer, mesh.drawState().indexCount(), first.alpha(), first.global(), bounds, centroids);
+				return new BufferPice(buffer, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), bounds, centroids);
 			}
 		}
 	}
