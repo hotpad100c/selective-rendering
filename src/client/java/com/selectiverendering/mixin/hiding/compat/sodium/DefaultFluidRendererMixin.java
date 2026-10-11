@@ -1,5 +1,7 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import net.caffeinemc.mods.sodium.api.util.NormI8;
+import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.AlphaGetter;
@@ -75,11 +77,12 @@ public class DefaultFluidRendererMixin {
 
 		BlockPos neighbour = BlockPosScratch.offset(selfPos, facing);
 		BlockState neighbourState = view.getBlockState(neighbour);
-		if (!AlphaGetter.isHidden(neighbourState, neighbour)) {
+		boolean sameFluid = neighbourState.getFluidState().getType().isSame(fluid.getType());
+		if (!AlphaGetter.fluidNeighbourForcesFace(view, neighbour, selectiveRendering$alpha, sameFluid)) {
 			return original;
 		}
 
-		return facing.getAxis().isHorizontal() || neighbourState.getFluidState().getType().isSame(fluid.getType());
+		return facing.getAxis().isHorizontal() || sameFluid;
 	}
 
 	@ModifyReturnValue(
@@ -132,6 +135,56 @@ public class DefaultFluidRendererMixin {
 	private Material selectiveRendering$useTranslucentMaterial(Material material) {
 		int alpha = selectiveRendering$alpha;
 		return alpha > 0 && alpha < 255 ? DefaultMaterials.TRANSLUCENT : material;
+	}
+
+	/** 光影包下半透明流体和地形一样没法靠顶点 alpha：截下四边形，改由常驻缓冲绘制。 */
+	@Inject(
+		method = "writeQuad",
+		at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/model/quad/ModelQuadView;getSprite()Lnet/minecraft/client/renderer/texture/TextureAtlasSprite;"),
+		cancellable = true
+	)
+	private void selectiveRendering$captureQuad(ChunkModelBuilder builder, TranslucentGeometryCollector collector, Material material, BlockPos pos, ModelQuadView quad, ModelQuadFacing facing, boolean shade, CallbackInfo ci) {
+		int alpha = selectiveRendering$alpha;
+		if (alpha <= 0 || alpha >= 255 || !TerrainTranslucency.capturing()) {
+			return;
+		}
+
+		float[] positions = new float[12];
+		float[] uvs = new float[8];
+		int[] colors = new int[4];
+		int[] lights = new int[4];
+
+		for (int i = 0; i < 4; i++) {
+			ChunkVertexEncoder.Vertex vertex = vertices[i];
+
+			positions[i * 3] = vertex.x;
+			positions[i * 3 + 1] = vertex.y;
+			positions[i * 3 + 2] = vertex.z;
+			uvs[i * 2] = vertex.u;
+			uvs[i * 2 + 1] = vertex.v;
+
+			float brightness = Math.min(1.0F, vertex.ao);
+			int abgr = vertex.color;
+			int red = (int) ((abgr & 0xFF) * brightness);
+			int green = (int) (((abgr >> 8) & 0xFF) * brightness);
+			int blue = (int) (((abgr >> 16) & 0xFF) * brightness);
+			colors[i] = (alpha << 24) | (red << 16) | (green << 8) | blue;
+
+			lights[i] = scaleLight(vertex.light, 1.0F / (0.75F + 0.25F * alpha / 255.0F));
+		}
+
+		int packedNormal = quad.getFaceNormal();
+		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal)));
+		TerrainTranslucency.addSprite(quad.getSprite());
+		ci.cancel();
+	}
+
+	/** 部分光影包会按 (0.75 + 0.25 * 顶点 alpha) 缩放光照，这里按同一公式预先补偿。 */
+	@Unique
+	private static int scaleLight(int light, float scale) {
+		int block = Math.min(240, Math.round((light & 0xFF) * scale));
+		int sky = Math.min(240, Math.round(((light >> 16) & 0xFF) * scale));
+		return block | (sky << 16);
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

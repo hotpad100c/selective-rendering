@@ -1,7 +1,7 @@
 package com.selectiverendering.mixin.render;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.selectiverendering.render.hiding.TerrainTranslucency;
+import com.selectiverendering.render.hiding.RetainedTerrain;
 import com.selectiverendering.render.information.InfoRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -32,11 +32,18 @@ public class LevelRendererMixin {
 	*///?}
 
 	@Inject(method = "submitEntities", at = @At("TAIL"))
-	private void selectiveRendering$submitTerrainTranslucency(PoseStack poseStack, LevelRenderState levelRenderState, SubmitNodeCollector collector, CallbackInfo ci) {
+	private void selectiveRendering$submitTerrainTranslucency(PoseStack poseStack, LevelRenderState levelRenderState, SubmitNodeCollector output, CallbackInfo ci) {
+		//? if >=26.3 {
 		ClientLevel level = Minecraft.getInstance().level;
+		if (level != null) {
+			RetainedTerrain.prepare(level, levelRenderState.cameraRenderState, output);
+		}
+		//?} else {
+		/*ClientLevel level = Minecraft.getInstance().level;
 		if (level != null) {
 			TerrainTranslucency.emit(poseStack, collector, level, levelRenderState.cameraRenderState.pos, levelRenderState.cameraRenderState.cullFrustum);
 		}
+		*///?}
 	}
 
 	@Inject(method = "finalizeGizmoCollection", at = @At("TAIL"), require = 0)

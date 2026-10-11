@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import net.caffeinemc.mods.sodium.client.render.texture.SpriteFinderCache;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Final;
 import org.joml.Vector3f;
@@ -105,6 +106,8 @@ public class BlockRendererMixin {
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
 		int[] lights = new int[4];
+
+		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
 
 		Vector3f normal = quad.faceNormal();
 		float inset = quad.getCullFace() == null ? 0.0F : CAPTURE_INSET;

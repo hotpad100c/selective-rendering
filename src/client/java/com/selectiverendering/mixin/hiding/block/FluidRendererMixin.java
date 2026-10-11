@@ -92,7 +92,7 @@ public class FluidRendererMixin {
 			return true;
 		}
 
-		return selectiveRendering$isNeighborHidden(direction)
+		return selectiveRendering$neighbourForcesFace(direction, neighborFluidState.getType().isSame(fluidState.getType()))
 			&& original.call(fluidState, blockState, direction, Fluids.EMPTY.defaultFluidState());
 	}
 
@@ -108,13 +108,13 @@ public class FluidRendererMixin {
 		FluidState neighborFluidState,
 		Operation<Boolean> original
 	) {
-		return original.call(fluidState, neighborFluidState) && !selectiveRendering$isNeighborHidden(Direction.UP);
+		return original.call(fluidState, neighborFluidState) && !selectiveRendering$neighbourForcesFace(Direction.UP, true);
 	}
 
 	@Unique
-	private static boolean selectiveRendering$isNeighborHidden(Direction direction) {
+	private static boolean selectiveRendering$neighbourForcesFace(Direction direction, boolean sameFluid) {
 		BlockPos pos = POS.get();
-		return pos != null && AlphaGetter.isHiddenIn(LEVEL.get(), BlockPosScratch.offset(pos, direction));
+		return pos != null && AlphaGetter.fluidNeighbourForcesFace(LEVEL.get(), BlockPosScratch.offset(pos, direction), ALPHA.get(), sameFluid);
 	}
 
 	@ModifyVariable(method = "vertex", at = @At("HEAD"), ordinal = 0)

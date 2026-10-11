@@ -319,7 +319,11 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 光影包把地形顶点 alpha 当作环境光遮蔽，地形没法靠顶点 alpha 半透明。开着光影（`ShaderPackState`，经 Iris API 反射判断）时，
 `BlockRendererMixin.bufferQuad` 对半透明方块的四边形不再写入 Sodium 的区块 mesh，而是交给 `TerrainTranslucency.add`，
 按区段保存（`ChunkBuilderMeshingTaskMixin` 在编译任务开始 / 结束时 begin / finish，重建后整段替换）。
-`LevelRendererMixin` 在 `submitEntities` 末尾调用 `TerrainTranslucency.emit`，用 `RenderTypes.entityTranslucent(方块图集)`
-的自定义几何提交，实体着色器认顶点 alpha。目前只有 Sodium 路径；光照取每顶点的原始光照并乘上 Sodium 算好的亮度，
-没有排序，流体不在内。
+边界上的面向内收 0.005 格避免和相邻方块共面，光照按 BSL 的 `0.75 + 0.25 * alpha` 公式预先补偿。
 
+绘制：26.3 上 `RetainedTerrain` 为每个区段维护一块常驻的 GPU 顶点缓冲（`RenderType` 为方块图集的 `entityTranslucent`），
+区段内容变化才重建（每帧有四边形预算，防止改配置后集中重建），之后每帧每区段只发一次绘制：
+`PreparedFrameMixin` 在 `FeatureRenderDispatcher.PreparedFrame.executeTranslucent` 开头调用 `RetainedTerrain.draw`，
+用 `PreparedRenderType.drawFromBuffer` 在同一个 RenderPass 里画，每个区段单独写一份带平移的 DynamicTransforms。
+26.1.2 / 26.2 没有这套 API，仍走原来每帧通过 `submitCustomGeometry` 提交的路径（`TerrainTranslucency.emit`）。
+没有排序，流体不在内，只做了 Sodium 路径。

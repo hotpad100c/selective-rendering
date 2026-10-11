@@ -75,6 +75,23 @@ public final class AlphaGetter {
 		return alphaNow(level.getBlockState(pos), pos, false) >= 0;
 	}
 
+	/**
+	 * 流体的一个面朝向被淡化的邻居时是否还要画：邻居是同种流体且淡化程度和自己相同，
+	 * 两侧同样透明，面互相剔除，不需要强制绘制。
+	 */
+	public static boolean fluidNeighbourForcesFace(@Nullable BlockGetter level, BlockPos neighbour, int selfAlpha, boolean sameFluid) {
+		if (level == null) {
+			return false;
+		}
+
+		int neighbourAlpha = getAlpha(level.getBlockState(neighbour), neighbour);
+		if (neighbourAlpha < 0) {
+			return false;
+		}
+
+		return !(sameFluid && neighbourAlpha == selfAlpha);
+	}
+
 	/** 判断方块是否被淡化，不记录区段。 */
 	public static boolean isFaded(BlockState state, BlockPos pos) {
 		return alphaNow(state, pos, false) >= 0;

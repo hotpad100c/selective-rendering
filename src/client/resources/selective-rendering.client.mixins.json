@@ -41,6 +41,7 @@
 		"recording.ClientLevelMixin",
 		"render.GuiMixin",
 		"render.LevelRendererMixin",
+		"render.PreparedFrameMixin",
 		"region.MouseHandlerMixin",
 		"hiding.block.FluidModelMixin",
 		"hiding.block.FluidRendererMixin",
