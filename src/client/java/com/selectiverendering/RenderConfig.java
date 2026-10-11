@@ -19,6 +19,8 @@ public final class RenderConfig {
 	private final boolean invert;
 	private final List<BlockMatchRule> rules;
 	private final List<BlockMatchRule> recorded;
+	private final List<String> ruleSources;
+	private final List<String> recordSources;
 	private final List<Region> regions;
 	private final List<Preset> presets;
 	private final RecordMode recordMode;
@@ -43,6 +45,8 @@ public final class RenderConfig {
 		this.invert = builder.invert;
 		this.rules = List.copyOf(builder.rules);
 		this.recorded = List.copyOf(builder.recorded);
+		this.ruleSources = List.copyOf(builder.ruleSources);
+		this.recordSources = List.copyOf(builder.recordSources);
 		this.regions = List.copyOf(builder.regions);
 		this.presets = List.copyOf(builder.presets);
 		this.recordMode = builder.recordMode;
@@ -80,6 +84,14 @@ public final class RenderConfig {
 
 	public List<BlockMatchRule> recorded() {
 		return recorded;
+	}
+
+	public List<String> ruleSources() {
+		return ruleSources;
+	}
+
+	public List<String> recordSources() {
+		return recordSources;
 	}
 
 	public List<Region> regions() {
@@ -187,6 +199,8 @@ public final class RenderConfig {
 		public boolean invert = SelectiveRenderingManager.DEFAULT_INVERT;
 		public List<BlockMatchRule> rules = List.of();
 		public List<BlockMatchRule> recorded = List.of();
+		public List<String> ruleSources = List.of();
+		public List<String> recordSources = List.of();
 		public List<Region> regions = List.of();
 		public List<Preset> presets = List.of();
 		public RecordMode recordMode = SelectiveRenderingManager.DEFAULT_RECORD_MODE;

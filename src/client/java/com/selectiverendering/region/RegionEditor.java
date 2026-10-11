@@ -258,7 +258,7 @@ public final class RegionEditor {
 
 		boolean blocksChanged = !old.min().equals(updated.min()) || !old.max().equals(updated.max())
 			|| old.options().blocks() != updated.options().blocks()
-			|| !old.options().rules().equals(updated.options().rules());
+			|| !old.options().ruleSources().equals(updated.options().ruleSources());
 
 		if (blocksChanged && SelectiveRenderingManager.getMode().usesRegion()) {
 			HiddenSections.mark(old.box());

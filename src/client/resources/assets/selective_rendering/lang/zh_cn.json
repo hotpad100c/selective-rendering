@@ -89,9 +89,9 @@
   "selective_rendering.config.region_apply": "应用",
   "selective_rendering.config.region_invalid": "请输入三个整数，例如 10, 64, -3",
   "selective_rendering.config.name.region_entity_types": "实体列表（本地）",
-  "selective_rendering.config.comment.region_entity_types": "这个选区影响的实体 id，例如 minecraft:zombie；留空表示所有实体",
+  "selective_rendering.config.comment.region_entity_types": "这个选区的实体名单，供「名单内 / 名单外」模式使用。填 id，id 后面可以跟 NBT 来匹配，例如 minecraft:zombie{IsBaby:1b}",
   "selective_rendering.config.name.region_particle_types": "粒子列表（本地）",
-  "selective_rendering.config.comment.region_particle_types": "这个选区影响的粒子 id，例如 minecraft:flame；留空表示所有粒子",
+  "selective_rendering.config.comment.region_particle_types": "这个选区的粒子名单，供「名单内 / 名单外」模式使用，例如 minecraft:flame",
   "selective_rendering.config.region_edit": "编辑",
   "selective_rendering.config.region_back": "返回",
   "selective_rendering.config.region_title": "选区 #%s"

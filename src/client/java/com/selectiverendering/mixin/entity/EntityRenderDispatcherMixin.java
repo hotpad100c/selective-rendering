@@ -4,6 +4,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.selectiverendering.blockentity.SelectiveSubmitNodeCollector;
+import com.selectiverendering.render.EntityIdHolder;
 import com.selectiverendering.render.RegionTargets;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderDispatcher;
@@ -16,20 +17,20 @@ import org.spongepowered.asm.mixin.Mixin;
 public class EntityRenderDispatcherMixin {
 	@WrapMethod(method = "submit")
 	private void selectiveRendering$submit(
-		EntityRenderState state,
-		CameraRenderState cameraRenderState,
+		EntityRenderState renderState,
+		CameraRenderState camera,
 		double x,
 		double y,
 		double z,
 		PoseStack poseStack,
-		SubmitNodeCollector collector,
+		SubmitNodeCollector submitNodeCollector,
 		Operation<Void> original
 	) {
-		int alpha = RegionTargets.entityAlpha(state.entityType, state.x, state.y, state.z);
+		int alpha = RegionTargets.entityAlpha(renderState.entityType, ((EntityIdHolder) renderState).selectiveRendering$entityId(), renderState.x, renderState.y, renderState.z);
 		if (alpha == 0) {
 			return;
 		}
 
-		original.call(state, cameraRenderState, x, y, z, poseStack, alpha > 0 ? new SelectiveSubmitNodeCollector(collector) : collector);
+		original.call(renderState, camera, x, y, z, poseStack, alpha > 0 ? new SelectiveSubmitNodeCollector(submitNodeCollector) : submitNodeCollector);
 	}
 }

@@ -24,6 +24,8 @@
 		"compat.sodium.DefaultFluidRendererMixin",
 		"compat.sodium.LightDataAccessMixin",
 		"entity.EntityRenderDispatcherMixin",
+		"entity.EntityRenderStateMixin",
+		"entity.EntityRendererMixin",
 		"interaction.ClientLevelClipMixin",
 		"lighting.AreaLightFlushMixin",
 		"lighting.AreaLightPacketMixin",

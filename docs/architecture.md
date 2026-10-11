@@ -16,7 +16,8 @@ src/
     ├── SelectiveRenderingManager.java   ★ 状态中心：全部可变状态 + 设置项 + 快照发布 + 落盘
     ├── RenderConfig.java                不可变快照（渲染线程只读它）；用 Builder 构造，加字段只改 Builder / 本类 / publish()
     ├── render/                          方块 / 区块渲染的判定与调度
-    │   ├── Alpha.java                   ★ 判定层：getAlpha()/alphaNow()…"这个方块淡不淡"
+    │   ├── RegionTargets.java           ★ 判定层：方块 / 实体 / 粒子是否被选区影响、透明度多少（共用一套模式判定）
+    │   ├── Alpha.java                   方块判定的对外门面：getAlpha()/alphaNow()…，负责受影响区段记账
     │   ├── RebuildScheduler.java        改完之后重烘焙哪些 section（三档）
     │   ├── HiddenSections.java          "哪些 section 含隐藏方块"的记账本
     │   ├── MovingBlockRenderContext.java 活塞移动中渲染的线程上下文
@@ -230,11 +231,23 @@ synchronized (LOCK) {
 一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，每项后跟一个方形小按钮），以及方块 / 实体 / 粒子三份本地名单
 （标准 `ConfigStringList`）。改动经 `RegionEditor.updateRegion` 替换 `REGIONS` 里的对应项，并触发重建和光照重算。
 
+方块 / 实体 / 粒子名单（全局方块名单、记录名单、选区里的三份本地名单）是 `SuggestingStringList`，带一个 `SuggestKind`。
+它的行由 `WidgetSuggestingList` 画出，按钮打开 `GuiSuggestStringListEdit`：继承 malilib 的 `GuiStringListEdit`，
+保留原来的列表编辑，只在输入框下面多一个补全提示框（Tab 补全、上下键选择、点击选择）。补全数据直接取自命令参数使用的接口：
+方块用 `BlockStateParser.fillSuggestions`（`SuggestKind.BLOCK`，进入世界后才有标签数据），实体和粒子用
+`SharedSuggestionProvider.suggestResource` 加对应注册表的 `keySet()`。新增一份需要补全的名单时用这个类型，
+并在列表控件的 `createListEntryWidget` 里分派到 `WidgetSuggestingList`。
+
+名单里用户写的每一项都原样保留，包括无法解析的：全局名单在 `SelectiveRenderingManager` 里存原始字符串
+（`RULE_SOURCES` / `RECORD_SOURCES`），解析成功的另存一份（`RULES` / `RECORDED`）用于匹配；选区的 `RegionOptions` 同理
+（`ruleSources()` 是原始写法，`rules()` 是能解析的）。无法解析的项只是不参与匹配，编辑界面
+（`GuiSuggestStringListEdit`）里把它的文字标成淡红色（`SuggestKind.isValid` 判定）。
+
 假配置项（`RegionRowConfig`、`RegionCornerConfig`、`RegionTargetsConfig`）的 `getConfigGuiDisplayName()` 必须返回空串：
 MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把所有配置项的输入框挤出屏幕。
 
 - 方块判定只用 `blocks` 为真的选区（`RenderConfig.blockRegions`）；本地名单与全局名单取并集，
-  只在选区内部且模式用到名单时生效（`Alpha.listedLocally`）。
+  只在选区内部且模式用到名单时生效（`RegionTargets.listedLocally`）。
 - 选区的字符串形式是 `minX,minY,minZ:maxX,maxY,maxZ`，设置与默认值不同时在末尾追加 SNBT：
   `0,0,0:9,9,9{entities:1b,rules:["minecraft:stone"],entity_types:["minecraft:zombie"]}`
   （键：`blocks` 默认真、`entities` / `particles` 默认假、`rules`、`entity_types`；只写与默认不同的项）。
@@ -251,8 +264,13 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 - 粒子：透明度为 0 时 `mixin/particle/ParticleEngineMixin` 在 `add` 处丢弃；大于 0 时
   `mixin/particle/SingleQuadParticleMixin` 在 `extractRotatedQuad` 里把不透明层换成同图集的半透明层，
   并把颜色 alpha 乘上透明度（只覆盖 `SingleQuadParticle`，其它粒子类型不受影响）。
-- 实体和粒子的命中规则在 `render/RegionTargets`：只看区域类模式（选区内 / 选区外，含 LISTED 变体但不用方块名单，
-  反转同样生效），黑 / 白名单模式不影响它们。
+- 方块、实体、粒子的命中规则都在 `render/RegionTargets`（`blockAlpha` / `entityAlpha` / `particleAlpha`），最终判定共用
+  同一个 `hidden(...)`：渲染模式的含义对三者一致：`…_名单内`要求在选区内（或外）且命中名单，
+  `…_名单外`要求没命中名单，不带名单的模式忽略名单，反转同样生效；黑 / 白名单模式不影响它们。名单是选区自己的实体 / 粒子名单，
+  为空时没有任何东西算命中。选区内用包含该位置的选区的名单，选区外模式用所有选区名单的并集。
+- 实体名单项可以是 id，也可以在 id 后面跟 `{nbt}`：`minecraft:zombie{IsBaby:1b}`。NBT 用 `NbtUtils.compareNbt` 做子集匹配，
+  实体的 NBT 通过 `Entity.saveWithoutId` 取得并按实体缓存几个 tick（`render/EntityNbt`）；实体 id 由
+  `EntityRendererMixin` 在 `createRenderState` 返回处存进渲染状态（`EntityRenderStateMixin` / `EntityIdHolder`）。
 
 配置项本身只是"视图"，权威数据源永远是 `SelectiveRenderingManager`；
 落盘由 `ModConfig.save()` 防抖异步完成。

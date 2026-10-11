@@ -74,6 +74,11 @@ public final class ModConfigGui extends GuiConfigsBase {
 							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);
 				}
 
+				if (entry.getConfig() instanceof SuggestingStringList) {
+					return new WidgetSuggestingList(x, y, this.browserEntryWidth, this.browserEntryHeight,
+							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);
+				}
+
 				if (entry.getConfig() instanceof RegionRowConfig) {
 					return new WidgetRegionRow(x, y, this.browserEntryWidth, this.browserEntryHeight,
 							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);

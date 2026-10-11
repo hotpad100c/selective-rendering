@@ -1,6 +1,9 @@
 package com.selectiverendering.util;
 
 import com.selectiverendering.SelectiveRendering;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ParticleArgument;
+import net.minecraft.server.commands.SetBlockCommand;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

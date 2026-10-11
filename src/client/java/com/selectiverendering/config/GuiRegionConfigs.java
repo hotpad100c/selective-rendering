@@ -44,6 +44,11 @@ public final class GuiRegionConfigs extends GuiConfigsBase {
 				this.getBrowserWidth(), this.getBrowserHeight(), this.getConfigWidth(), 0.f, this.useKeybindSearch(), this) {
 			@Override
 			protected WidgetConfigOption createListEntryWidget(int x, int y, int listIndex, boolean isOdd, ConfigOptionWrapper entry) {
+				if (entry.getConfig() instanceof SuggestingStringList) {
+					return new WidgetSuggestingList(x, y, this.browserEntryWidth, this.browserEntryHeight,
+							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);
+				}
+
 				if (entry.getConfig() instanceof RegionCornerConfig) {
 					return new WidgetRegionCorner(x, y, this.browserEntryWidth, this.browserEntryHeight,
 							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);

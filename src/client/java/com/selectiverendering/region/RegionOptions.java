@@ -1,14 +1,19 @@
 package com.selectiverendering.region;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.selectiverendering.matchingrule.BlockMatchRule;
+import com.selectiverendering.render.EntityNbt;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.nbt.TagParser;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.EntityType;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -16,79 +21,139 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** 选区自己的隐藏对象开关和三份本地名单（方块、实体类型、粒子类型）。 */
-public record RegionOptions(
-	boolean blocks,
-	boolean entities,
-	boolean particles,
-	List<BlockMatchRule> rules,
-	List<String> entityTypes,
-	List<String> particleTypes
-) {
+/**
+ * 选区自己的隐藏对象开关和三份本地名单（方块、实体、粒子）；不可变。
+ * 名单保留用户写的每一项，无法解析的项只是不参与匹配，由界面标出来。
+ */
+public final class RegionOptions {
 	public static final RegionOptions DEFAULT = new RegionOptions(true, false, false, List.of(), List.of(), List.of());
 
 	private static final Map<EntityType<?>, String> ENTITY_IDS = new ConcurrentHashMap<>();
 	private static final Map<ParticleType<?>, String> PARTICLE_IDS = new ConcurrentHashMap<>();
 
-	public RegionOptions {
-		rules = rules == null ? List.of() : List.copyOf(rules);
-		entityTypes = entityTypes == null ? List.of() : List.copyOf(entityTypes);
-		particleTypes = particleTypes == null ? List.of() : List.copyOf(particleTypes);
-	}
+	private final boolean blocks;
+	private final boolean entities;
+	private final boolean particles;
+	private final List<String> ruleSources;
+	private final List<String> entityTypes;
+	private final List<String> particleTypes;
 
-	public RegionOptions withBlocks(boolean value) {
-		return new RegionOptions(value, entities, particles, rules, entityTypes, particleTypes);
-	}
+	private final List<BlockMatchRule> rules;
+	private final List<EntityRule> entityRules;
 
-	public RegionOptions withEntities(boolean value) {
-		return new RegionOptions(blocks, value, particles, rules, entityTypes, particleTypes);
-	}
+	public RegionOptions(boolean blocks, boolean entities, boolean particles, List<String> ruleSources, List<String> entityTypes, List<String> particleTypes) {
+		this.blocks = blocks;
+		this.entities = entities;
+		this.particles = particles;
+		this.ruleSources = clean(ruleSources, false);
+		this.entityTypes = clean(entityTypes, true);
+		this.particleTypes = clean(particleTypes, true);
 
-	public RegionOptions withParticles(boolean value) {
-		return new RegionOptions(blocks, entities, value, rules, entityTypes, particleTypes);
-	}
-
-	public RegionOptions withRules(List<BlockMatchRule> value) {
-		return new RegionOptions(blocks, entities, particles, value, entityTypes, particleTypes);
-	}
-
-	public RegionOptions withRuleSources(List<String> sources) {
-		List<BlockMatchRule> parsed = new ArrayList<>();
-
-		if (sources != null) {
-			for (String source : sources) {
-				BlockMatchRule rule = BlockMatchRule.parse(source);
-				if (rule != null) {
-					parsed.add(rule);
-				}
+		List<BlockMatchRule> parsedRules = new ArrayList<>();
+		for (String source : this.ruleSources) {
+			BlockMatchRule rule = BlockMatchRule.parse(source);
+			if (rule != null) {
+				parsedRules.add(rule);
 			}
 		}
 
-		return withRules(parsed);
+		List<EntityRule> parsedEntities = new ArrayList<>();
+		for (String entry : this.entityTypes) {
+			EntityRule rule = EntityRule.parse(entry);
+			if (rule != null) {
+				parsedEntities.add(rule);
+			}
+		}
+
+		this.rules = List.copyOf(parsedRules);
+		this.entityRules = List.copyOf(parsedEntities);
 	}
 
-	public RegionOptions withEntityTypes(List<String> ids) {
-		return new RegionOptions(blocks, entities, particles, rules, normalize(ids), particleTypes);
+	public boolean blocks() {
+		return blocks;
 	}
 
-	public RegionOptions withParticleTypes(List<String> ids) {
-		return new RegionOptions(blocks, entities, particles, rules, entityTypes, normalize(ids));
+	public boolean entities() {
+		return entities;
+	}
+
+	public boolean particles() {
+		return particles;
+	}
+
+	/** 能解析的方块规则；原始写法见 {@link #ruleSources()}。 */
+	public List<BlockMatchRule> rules() {
+		return rules;
 	}
 
 	public List<String> ruleSources() {
-		return rules.stream().map(BlockMatchRule::source).toList();
+		return ruleSources;
 	}
 
-	public boolean matchesEntity(EntityType<?> type) {
-		return entityTypes.isEmpty() || entityTypes.contains(ENTITY_IDS.computeIfAbsent(type, key -> BuiltInRegistries.ENTITY_TYPE.getKey(key).toString()));
+	public List<String> entityTypes() {
+		return entityTypes;
 	}
 
-	public boolean matchesParticle(ParticleType<?> type) {
-		if (particleTypes.isEmpty()) {
-			return true;
+	public List<String> particleTypes() {
+		return particleTypes;
+	}
+
+	public RegionOptions withBlocks(boolean value) {
+		return new RegionOptions(value, entities, particles, ruleSources, entityTypes, particleTypes);
+	}
+
+	public RegionOptions withEntities(boolean value) {
+		return new RegionOptions(blocks, value, particles, ruleSources, entityTypes, particleTypes);
+	}
+
+	public RegionOptions withParticles(boolean value) {
+		return new RegionOptions(blocks, entities, value, ruleSources, entityTypes, particleTypes);
+	}
+
+	public RegionOptions withRuleSources(List<String> value) {
+		return new RegionOptions(blocks, entities, particles, value, entityTypes, particleTypes);
+	}
+
+	public RegionOptions withEntityTypes(List<String> value) {
+		return new RegionOptions(blocks, entities, particles, ruleSources, value, particleTypes);
+	}
+
+	public RegionOptions withParticleTypes(List<String> value) {
+		return new RegionOptions(blocks, entities, particles, ruleSources, entityTypes, value);
+	}
+
+	/** 实体是否在这份名单里；名单项可以是 id，也可以在 id 后面跟 {nbt} 只匹配 NBT 包含它的实体。名单为空时谁都不在名单里。 */
+	public boolean listsEntity(EntityType<?> type, int entityId) {
+		if (entityRules.isEmpty()) {
+			return false;
 		}
 
-		return type != null && particleTypes.contains(PARTICLE_IDS.computeIfAbsent(type, key -> BuiltInRegistries.PARTICLE_TYPE.getKey(key).toString()));
+		String id = ENTITY_IDS.computeIfAbsent(type, key -> BuiltInRegistries.ENTITY_TYPE.getKey(key).toString());
+
+		for (EntityRule rule : entityRules) {
+			if (rule.id.equals(id) && (rule.nbt == null || NbtUtils.compareNbt(rule.nbt, EntityNbt.of(entityId), true))) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** 粒子类型是否在这份名单里；类型未知的粒子不在名单里。 */
+	public boolean listsParticle(ParticleType<?> type) {
+		return type != null && !particleTypes.isEmpty()
+			&& particleTypes.contains(PARTICLE_IDS.computeIfAbsent(type, key -> BuiltInRegistries.PARTICLE_TYPE.getKey(key).toString()));
+	}
+
+	/** 实体名单项能否解析：id 是已注册的实体类型，可选的 {nbt} 语法正确。 */
+	public static boolean validEntity(String entry) {
+		EntityRule rule = EntityRule.parse(entry.trim());
+		return rule != null && BuiltInRegistries.ENTITY_TYPE.containsKey(Identifier.parse(rule.id));
+	}
+
+	public static boolean validParticle(String entry) {
+		Identifier id = Identifier.tryParse(entry.trim().toLowerCase());
+		return id != null && BuiltInRegistries.PARTICLE_TYPE.containsKey(id);
 	}
 
 	/** 只写与默认值不同的项 */
@@ -107,8 +172,8 @@ public record RegionOptions(
 			tag.putBoolean("particles", true);
 		}
 
-		if (!rules.isEmpty()) {
-			tag.put("rules", strings(ruleSources()));
+		if (!ruleSources.isEmpty()) {
+			tag.put("rules", strings(ruleSources));
 		}
 
 		if (!entityTypes.isEmpty()) {
@@ -127,28 +192,47 @@ public record RegionOptions(
 			tag.getBooleanOr("blocks", true),
 			tag.getBooleanOr("entities", false),
 			tag.getBooleanOr("particles", false),
-			null,
-			null,
-			null
-		).withRuleSources(strings(tag.getListOrEmpty("rules")))
-			.withEntityTypes(strings(tag.getListOrEmpty("entity_types")))
-			.withParticleTypes(strings(tag.getListOrEmpty("particle_types")));
+			strings(tag.getListOrEmpty("rules")),
+			strings(tag.getListOrEmpty("entity_types")),
+			strings(tag.getListOrEmpty("particle_types"))
+		);
 	}
 
-	/** 试图将 id 规范成带命名空间的形式，无效的丢弃。 */
-	private static List<String> normalize(List<String> ids) {
-		LinkedHashSet<String> normalized = new LinkedHashSet<>();
+	/** 去掉首尾空白、空项和重复项；registry 项在能识别 id 时规范成带命名空间的小写形式，识别不了的原样保留。 */
+	private static List<String> clean(@Nullable List<String> entries, boolean registry) {
+		LinkedHashSet<String> cleaned = new LinkedHashSet<>();
 
-		if (ids != null) {
-			for (String id : ids) {
-				Identifier parsed = id == null ? null : Identifier.tryParse(id.trim().toLowerCase());
-				if (parsed != null) {
-					normalized.add(parsed.toString());
+		if (entries != null) {
+			for (String entry : entries) {
+				String text = entry == null ? "" : entry.trim();
+
+				if (!text.isEmpty()) {
+					cleaned.add(registry ? normalize(text) : text);
 				}
 			}
 		}
 
-		return List.copyOf(normalized);
+		return List.copyOf(cleaned);
+	}
+
+	private static String normalize(String text) {
+		int brace = text.indexOf('{');
+		Identifier id = Identifier.tryParse((brace < 0 ? text : text.substring(0, brace)).trim().toLowerCase());
+
+		if (id == null) {
+			return text;
+		}
+
+		if (brace < 0) {
+			return id.toString();
+		}
+
+		try {
+			return id + TagParser.parseCompoundFully(text.substring(brace)).toString();
+		}
+		catch (CommandSyntaxException e) {
+			return text;
+		}
 	}
 
 	private static ListTag strings(List<String> values) {
@@ -169,5 +253,28 @@ public record RegionOptions(
 		}
 
 		return values;
+	}
+
+	private record EntityRule(String id, @Nullable CompoundTag nbt) {
+		@Nullable
+		static EntityRule parse(String entry) {
+			int brace = entry.indexOf('{');
+			Identifier id = Identifier.tryParse((brace < 0 ? entry : entry.substring(0, brace)).trim().toLowerCase());
+
+			if (id == null) {
+				return null;
+			}
+
+			if (brace < 0) {
+				return new EntityRule(id.toString(), null);
+			}
+
+			try {
+				return new EntityRule(id.toString(), TagParser.parseCompoundFully(entry.substring(brace)));
+			}
+			catch (CommandSyntaxException e) {
+				return null;
+			}
+		}
 	}
 }

@@ -44,14 +44,14 @@ public final class ModConfigs {
 	public static final ModeConfig MODE = new ModeConfig("mode").apply(KEY);
 	public static final ConfigBoolean INVERT = new ConfigBoolean("invert", SelectiveRenderingManager.DEFAULT_INVERT).apply(KEY);
 	public static final TransparencyConfig TRANSPARENCY = new TransparencyConfig("transparency").apply(KEY);
-	public static final ConfigStringList RULES = new ConfigStringList("items", ImmutableList.of()).apply(KEY);
+	public static final SuggestingStringList RULES = new SuggestingStringList("items", SuggestKind.BLOCK).apply(KEY);
 	public static final ConfigHotkey BLOCKS_KEY = new ConfigHotkey("blocks_key", "LEFT_ALT", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey REGION_KEY = new ConfigHotkey("region_key", "LEFT_CONTROL", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigString WAND = new ConfigString("wand", SelectiveRenderingManager.DEFAULT_WAND).apply(KEY);
 	public static final ConfigBoolean FULL_BRIGHT = new ConfigBoolean("full_bright", SelectiveRenderingManager.DEFAULT_FULL_BRIGHT).apply(KEY);
 	public static final ConfigBooleanHotkeyed PASS_THROUGH = new ConfigBooleanHotkeyed("pass_through", SelectiveRenderingManager.DEFAULT_PASS_THROUGH, "").apply(KEY);
-	public static final ConfigStringList RECORDED = new ConfigStringList("recorded", ImmutableList.of()).apply(KEY);
+	public static final SuggestingStringList RECORDED = new SuggestingStringList("recorded", SuggestKind.BLOCK).apply(KEY);
 	public static final ConfigOptionList RECORD_MODE = new ConfigOptionList("record_mode", SelectiveRenderingManager.DEFAULT_RECORD_MODE).apply(KEY);
 	public static final ConfigOptionList RECORD_APPLY_MODE = new ConfigOptionList("record_apply_mode", SelectiveRenderingManager.DEFAULT_RECORD_APPLY_MODE).apply(KEY);
 	public static final ConfigHotkey RECORD_KEY = new ConfigHotkey("record_key", "", KeybindSettings.DEFAULT).apply(KEY);

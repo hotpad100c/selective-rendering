@@ -138,8 +138,17 @@ public final class BlockMatchRule {
 		}
 	}
 
+	public static boolean isValid(String input) {
+		return parse(input, false) != null;
+	}
+
 	@Nullable
 	public static BlockMatchRule parse(String input) {
+		return parse(input, true);
+	}
+
+	@Nullable
+	private static BlockMatchRule parse(String input, boolean log) {
 		String source = input.trim();
 		if (source.isEmpty()) {
 			return null;
@@ -159,13 +168,17 @@ public final class BlockMatchRule {
 		else {
 			Identifier identifier = Identifier.tryParse(target.contains(":") ? target : "minecraft:" + target);
 			if (identifier == null) {
-				Log.warn("[rule] Unknown block id, ignored: {}", source);
+				if (log) {
+					Log.warn("[rule] Unknown block id, ignored: {}", source);
+				}
 				return null;
 			}
 
 			block = BuiltInRegistries.BLOCK.getOptional(identifier).orElse(null);
 			if (block == null) {
-				Log.warn("[rule] Unknown block id，ignored: {}", source);
+				if (log) {
+					Log.warn("[rule] Unknown block id, ignored: {}", source);
+				}
 				return null;
 			}
 		}
@@ -179,7 +192,9 @@ public final class BlockMatchRule {
 				}
 
 				if (block.getStateDefinition().getProperty(name) == null) {
-					Log.warn("[rule] {} does not have the state {}, ignored: {}", target, name, source);
+					if (log) {
+						Log.warn("[rule] {} does not have the state {}, ignored: {}", target, name, source);
+					}
 					return null;
 				}
 			}

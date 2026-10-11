@@ -89,9 +89,9 @@
   "selective_rendering.config.region_apply": "Apply",
   "selective_rendering.config.region_invalid": "Enter three integers, for example 10, 64, -3",
   "selective_rendering.config.name.region_entity_types": "Entity list (local)",
-  "selective_rendering.config.comment.region_entity_types": "Entity ids this selection affects, e.g. minecraft:zombie. Empty means every entity",
+  "selective_rendering.config.comment.region_entity_types": "Entities this selection lists, used by the \"listed / unlisted\" modes. An id, optionally followed by NBT to match, e.g. minecraft:zombie{IsBaby:1b}",
   "selective_rendering.config.name.region_particle_types": "Particle list (local)",
-  "selective_rendering.config.comment.region_particle_types": "Particle ids this selection affects, e.g. minecraft:flame. Empty means every particle",
+  "selective_rendering.config.comment.region_particle_types": "Particles this selection lists, used by the \"listed / unlisted\" modes, e.g. minecraft:flame",
   "selective_rendering.config.region_edit": "Edit",
   "selective_rendering.config.region_back": "Back",
   "selective_rendering.config.region_title": "Selection #%s"

@@ -105,6 +105,10 @@ public final class SelectiveRenderingManager {
 
 	private static final List<BlockMatchRule> RECORDED = new ArrayList<>();
 
+	/** 用户写的每一项原样保留（含无法解析的），RULES / RECORDED 只是其中能解析的部分。 */
+	private static final List<String> RULE_SOURCES = new ArrayList<>();
+	private static final List<String> RECORD_SOURCES = new ArrayList<>();
+
 	public static final List<Region> REGIONS = new ArrayList<>();
 
 	private static final List<Preset> PRESETS = new ArrayList<>();
@@ -258,28 +262,14 @@ public final class SelectiveRenderingManager {
 			fullBright = config.fullBright;
 			passThrough = config.passThrough;
 
-			if (config.rules != null) {
-				for (String source : config.rules) {
-					BlockMatchRule rule = BlockMatchRule.parse(source);
-					if (rule != null) {
-						RULES.add(rule);
-					}
-				}
-			}
+			setRules(config.rules);
 
 			corner1 = toBlockPos(config.regionPos1);
 			corner2 = toBlockPos(config.regionPos2);
 			selectedCorner = corner2 != null ? 1 : corner1 != null ? 0 : -1;
 			updateRegion();
 
-			if (config.recorded != null) {
-				for (String source : config.recorded) {
-					BlockMatchRule rule = BlockMatchRule.parse(source);
-					if (rule != null) {
-						RECORDED.add(rule);
-					}
-				}
-			}
+			setRecorded(config.recorded);
 
 			for (ModConfig.RegionEntry entry : config.regionEntries) {
 				Region added = toRegion(entry);
@@ -381,12 +371,11 @@ public final class SelectiveRenderingManager {
 		}
 
 		synchronized (LOCK) {
-			for (BlockMatchRule existing : RULES) {
-				if (existing.source().equalsIgnoreCase(rule.source())) {
-					return false;
-				}
+			if (hasRule(rule.source())) {
+				return false;
 			}
 
+			RULE_SOURCES.add(rule.source());
 			RULES.add(rule);
 			commitAndRemember();
 		}
@@ -398,9 +387,11 @@ public final class SelectiveRenderingManager {
 
 	public static boolean removeRule(String source) {
 		synchronized (LOCK) {
-			if (!RULES.removeIf(rule -> rule.source().equalsIgnoreCase(source.trim()))) {
+			if (!RULE_SOURCES.removeIf(existing -> existing.equalsIgnoreCase(source.trim()))) {
 				return false;
 			}
+
+			RULES.removeIf(rule -> rule.source().equalsIgnoreCase(source.trim()));
 
 			commitAndRemember();
 		}
@@ -411,7 +402,7 @@ public final class SelectiveRenderingManager {
 	}
 
 	public static List<String> ruleSources() {
-		return config.rules().stream().map(BlockMatchRule::source).toList();
+		return config.ruleSources();
 	}
 
 	public static void setRuleSources(List<String> sources) {
@@ -423,17 +414,7 @@ public final class SelectiveRenderingManager {
 		ruleSourceInput = wanted;
 
 		synchronized (LOCK) {
-			RULES.clear();
-
-			if (sources != null) {
-				for (String source : sources) {
-					BlockMatchRule rule = BlockMatchRule.parse(source);
-					if (rule != null && !hasRule(rule.source())) {
-						RULES.add(rule);
-					}
-				}
-			}
-
+			setRules(sources);
 			commit();
 		}
 
@@ -444,8 +425,8 @@ public final class SelectiveRenderingManager {
 
 	public static boolean hasRule(String source) {
 		String trimmed = source.trim();
-		for (BlockMatchRule rule : RULES) {
-			if (rule.source().equalsIgnoreCase(trimmed)) {
+		for (String existing : RULE_SOURCES) {
+			if (existing.equalsIgnoreCase(trimmed)) {
 				return true;
 			}
 		}
@@ -454,7 +435,7 @@ public final class SelectiveRenderingManager {
 	}
 
 	public static List<String> recordSources() {
-		return config.recorded().stream().map(BlockMatchRule::source).toList();
+		return config.recordSources();
 	}
 
 	/** 更新记录名单，同时检查输入缓存与实际名单是否一致。 */
@@ -462,32 +443,53 @@ public final class SelectiveRenderingManager {
 		List<String> wanted = sources == null ? List.of() : List.copyOf(sources);
 
 		synchronized (LOCK) {
-			if (wanted.equals(recordSourceInput) && wanted.equals(sourcesOf(RECORDED))) {
+			if (wanted.equals(recordSourceInput) && wanted.equals(RECORD_SOURCES)) {
 				return;
 			}
 
 			recordSourceInput = wanted;
-			RECORDED.clear();
-
-			for (String source : wanted) {
-				BlockMatchRule rule = BlockMatchRule.parse(source);
-				if (rule != null && !hasRecord(rule.source())) {
-					RECORDED.add(rule);
-				}
-			}
-
+			setRecorded(wanted);
 			commit();
 		}
 	}
 
-	private static List<String> sourcesOf(List<BlockMatchRule> rules) {
-		return rules.stream().map(BlockMatchRule::source).toList();
+	private static void setRules(List<String> sources) {
+		RULE_SOURCES.clear();
+		RULES.clear();
+		parseInto(sources, RULE_SOURCES, RULES);
+	}
+
+	private static void setRecorded(List<String> sources) {
+		RECORD_SOURCES.clear();
+		RECORDED.clear();
+		parseInto(sources, RECORD_SOURCES, RECORDED);
+	}
+
+	/** 每一项去掉首尾空白、去重后原样保留，能解析的另存一份用于匹配。 */
+	private static void parseInto(List<String> sources, List<String> kept, List<BlockMatchRule> parsed) {
+		if (sources == null) {
+			return;
+		}
+
+		for (String source : sources) {
+			String text = source == null ? "" : source.trim();
+			if (text.isEmpty() || kept.stream().anyMatch(existing -> existing.equalsIgnoreCase(text))) {
+				continue;
+			}
+
+			kept.add(text);
+
+			BlockMatchRule rule = BlockMatchRule.parse(text);
+			if (rule != null) {
+				parsed.add(rule);
+			}
+		}
 	}
 
 	public static boolean hasRecord(String source) {
 		String trimmed = source.trim();
-		for (BlockMatchRule rule : RECORDED) {
-			if (rule.source().equalsIgnoreCase(trimmed)) {
+		for (String existing : RECORD_SOURCES) {
+			if (existing.equalsIgnoreCase(trimmed)) {
 				return true;
 			}
 		}
@@ -673,7 +675,7 @@ public final class SelectiveRenderingManager {
 			return null;
 		}
 
-		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, null, null, null).withRuleSources(entry.rules).withEntityTypes(entry.entityTypes).withParticleTypes(entry.particleTypes));
+		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, entry.rules, entry.entityTypes, entry.particleTypes));
 	}
 
 	private static Region toRegion(int[] values) {
@@ -694,15 +696,7 @@ public final class SelectiveRenderingManager {
 			transparency = Math.clamp(preset.transparency, 0, MAX_TRANSPARENCY);
 			invert = preset.invert;
 
-			RULES.clear();
-			if (preset.rules != null) {
-				for (String source : preset.rules) {
-					BlockMatchRule rule = BlockMatchRule.parse(source);
-					if (rule != null) {
-						RULES.add(rule);
-					}
-				}
-			}
+			setRules(preset.rules);
 
 			REGIONS.clear();
 			if (preset.regions != null) {
@@ -765,6 +759,8 @@ public final class SelectiveRenderingManager {
 		next.invert = invert;
 		next.rules = RULES;
 		next.recorded = RECORDED;
+		next.ruleSources = RULE_SOURCES;
+		next.recordSources = RECORD_SOURCES;
 		next.regions = REGIONS;
 		next.presets = PRESETS;
 		next.recordMode = recordMode;
@@ -780,9 +776,8 @@ public final class SelectiveRenderingManager {
 
 	/** 缓存界面输入，避免配置同步触发重复写回。 */
 	private static void rememberSources() {
-		ruleSourceInput = RULES.stream().map(BlockMatchRule::source).toList();
-
-		recordSourceInput = RECORDED.stream().map(BlockMatchRule::source).toList();
+		ruleSourceInput = List.copyOf(RULE_SOURCES);
+		recordSourceInput = List.copyOf(RECORD_SOURCES);
 	}
 
 	/** 将运行时状态写回磁盘配置并请求保存。 */
@@ -796,8 +791,8 @@ public final class SelectiveRenderingManager {
 		config.wand = wand;
 		config.fullBright = fullBright;
 		config.passThrough = passThrough;
-		config.rules = RULES.stream().map(BlockMatchRule::source).toList();
-		config.recorded = RECORDED.stream().map(BlockMatchRule::source).toList();
+		config.rules = List.copyOf(RULE_SOURCES);
+		config.recorded = List.copyOf(RECORD_SOURCES);
 		config.regionPos1 = toArray(corner1);
 		config.regionPos2 = toArray(corner2);
 		config.regionEntries = REGIONS.stream().map(SelectiveRenderingManager::toEntry).toList();

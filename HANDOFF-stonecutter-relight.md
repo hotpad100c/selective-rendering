@@ -16,7 +16,7 @@
 - **没测过的:** 一切运行期行为——游戏能否启动、mixin 是否真的注入成功（`defaultRequire: 0`，注入失败是**静默**的）、光照效果、三个版本的 HUD / 魔杖 / 方块实体淡化。
 - **`stonecutter active` 现为 "26.3"**（= `vcsVersion`，这是正确的签入状态）。
 - **未提交改动里混着几条互相独立的线**（提交时建议拆成独立提交，不要 `git add -A`）:
-  1. 作者原有的未提交改动：`queryBlockEntity` 和 `alphaNow` 里活塞分支的写法（现在在 `Alpha.java`）。作者说"可能不对，别管"，我只是原样搬运。
+  1. 作者原有的未提交改动：`queryBlockEntity` 和 `alphaNow` 里活塞分支的写法（现在在 `RegionTargets.java`，`Alpha.queryBlockEntity` 仍在 `Alpha.java`）。作者说"可能不对，别管"，我只是原样搬运。
   2. 光照重构：`LightSuppression`（重写）、`AreaLightFlushMixin`、`AreaLightPacketMixin`、4 个光照 mixin 改为调用 `LightSuppression.airIfHidden`。
   3. 类拆分：`Alpha` / `RegionEditor` / `RebuildScheduler` / `RenderConfig`，`SelectiveRenderingManager` 从 1929 行缩到约 950 行，约 25 个文件的调用点随之改动。
   4. Stonecutter 迁移：根目录的 `*.gradle.kts`、删除 `versions/*/src`、`settings.gradle`、`build.gradle`、`gradle/mod.gradle`，十个版本专属文件合并回 `src/`。
@@ -64,7 +64,7 @@
 | 共用构建脚本、各版本依赖坐标 `versionDeps` | `build.gradle.kts` |
 | 光照伪装 / 标记 / 分批重算 | `src/client/java/com/selectiverendering/lighting/LightSuppression.java` |
 | 光照触发的两个 mixin | `mixin/lighting/AreaLightPacketMixin.java`（标记）、`mixin/lighting/AreaLightFlushMixin.java`（执行） |
-| 判定层（只读） | `render/Alpha.java` |
+| 判定层（只读） | `render/RegionTargets.java`（门面 `render/Alpha.java`） |
 | 状态中心（可变状态、快照发布、落盘） | `SelectiveRenderingManager.java` + `RenderConfig.java` |
 | 魔杖角点与选区的增删裁 | `region/RegionEditor.java` |
 | 重建调度三档 | `render/RebuildScheduler.java` |
