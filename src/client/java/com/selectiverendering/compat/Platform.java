@@ -79,6 +79,18 @@ public final class Platform {
 		*///?}
 	}
 
+	public static void swingMainHand(Minecraft minecraft) {
+		if (minecraft.player == null) {
+			return;
+		}
+
+		//? if >=26.3 {
+		minecraft.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
+		//?} else {
+		/*minecraft.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+		*///?}
+	}
+
 	public static boolean isKeyDown(Window window, int key) {
 		//? if >=26.3 {
 		return InputConstants.isKeyDown(key);

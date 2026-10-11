@@ -7,7 +7,6 @@ import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.compat.Platform;
 import com.selectiverendering.config.entrypoint.ModHotkeys;
 import com.selectiverendering.interaction.OperationActions;
-import com.selectiverendering.matchingrule.BlockListMessage;
 import com.selectiverendering.region.CameraRay;
 import com.selectiverendering.region.RegionEditor;
 import net.minecraft.client.Camera;
@@ -15,11 +14,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -99,10 +94,12 @@ public class MouseHandlerMixin {
 		if (ModHotkeys.regionHeld()) {
 			if (buttonInfo.button() == Platform.MOUSE_LEFT) {
 				RegionEditor.toggleAreaAlongRay(rayStart(minecraft), rayEnd(minecraft));
+				Platform.swingMainHand(minecraft);
 				ci.cancel();
 			}
 			else if (buttonInfo.button() == Platform.MOUSE_RIGHT) {
 				RegionEditor.clipRegions();
+				Platform.swingMainHand(minecraft);
 				ci.cancel();
 			}
 			return;
@@ -111,9 +108,19 @@ public class MouseHandlerMixin {
         if (ModHotkeys.operationHeld()) {
         	int button = buttonInfo.button();
         	if ((button == Platform.MOUSE_LEFT || button == Platform.MOUSE_RIGHT) && OperationActions.operate(minecraft, camera, button == Platform.MOUSE_RIGHT)) {
+        		Platform.swingMainHand(minecraft);
         		ci.cancel();
         	}
         	return;
+        }
+
+        Window handle = minecraft.getWindow();
+        boolean shift = Platform.isKeyDown(handle, InputConstants.KEY_LSHIFT) || Platform.isKeyDown(handle, InputConstants.KEY_RSHIFT);
+        if (shift && buttonInfo.button() == Platform.MOUSE_LEFT) {
+            RegionEditor.clearCorners();
+            Platform.swingMainHand(minecraft);
+            ci.cancel();
+            return;
         }
 
         BlockHitResult hit = CameraRay.pick(minecraft, camera, MAX_TRACE_DISTANCE);
@@ -124,10 +131,12 @@ public class MouseHandlerMixin {
 
 		if (buttonInfo.button() == Platform.MOUSE_LEFT) {
 			RegionEditor.setCorner(0, hit.getBlockPos());
+			Platform.swingMainHand(minecraft);
 			ci.cancel();
 		}
 		else if (buttonInfo.button() == Platform.MOUSE_RIGHT) {
 			RegionEditor.setCorner(1, hit.getBlockPos());
+			Platform.swingMainHand(minecraft);
 			ci.cancel();
 		}
 	}

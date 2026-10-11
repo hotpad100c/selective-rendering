@@ -33,6 +33,7 @@ The default wand is a **breeze rod** — hold it in your hand to enable the oper
 | --------------------- | --------------------------------------------- |
 | Left click            | Set corner 1 (red box)                        |
 | Right click           | Set corner 2 (blue box)                       |
+| Shift + left click    | Clear both corners                            |
 | Middle click          | Select a corner or a region; air clears       |
 | Selection key + left  | Add a selection or remove an existing one     |
 | Selection key + right | Clip every stored selection with the current one |

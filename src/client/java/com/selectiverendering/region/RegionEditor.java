@@ -49,6 +49,16 @@ public final class RegionEditor {
 		}
 	}
 
+	public static void clearCorners() {
+		synchronized (SelectiveRenderingManager.LOCK) {
+			SelectiveRenderingManager.corner1 = null;
+			SelectiveRenderingManager.corner2 = null;
+			SelectiveRenderingManager.selectedCorner = -1;
+			SelectiveRenderingManager.updateRegion();
+			SelectiveRenderingManager.commit();
+		}
+	}
+
 	public static boolean isCornerSelected(int index) {
 		return SelectiveRenderingManager.selectedCorner == index;
 	}
@@ -136,9 +146,11 @@ public final class RegionEditor {
 		return first == null || second == null ? null : Area.of(first, second);
 	}
 
-	public static boolean addAreaFromSelection() {
+	public static void addAreaFromSelection() {
 		Area selection = selection();
-		return selection != null && addAreas(List.of(selection)) > 0;
+		if (selection != null) {
+			addAreas(List.of(selection));
+		}
 	}
 
 	/** 有选中的选区就并入它，否则建一个新选区。返回新增的范围数。 */
