@@ -1,8 +1,8 @@
 package com.selectiverendering.blockentity;
 
-import com.selectiverendering.mixin.blockentity.RenderSetupAccessor;
-import com.selectiverendering.mixin.blockentity.RenderTypeAccessor;
-import com.selectiverendering.mixin.blockentity.TextureBindingAccessor;
+import com.selectiverendering.mixin.hiding.blockentity.RenderSetupAccessor;
+import com.selectiverendering.mixin.hiding.blockentity.RenderTypeAccessor;
+import com.selectiverendering.mixin.hiding.blockentity.TextureBindingAccessor;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.resources.Identifier;

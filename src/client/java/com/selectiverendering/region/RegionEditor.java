@@ -2,8 +2,8 @@ package com.selectiverendering.region;
 
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.lighting.LightSuppression;
-import com.selectiverendering.render.HiddenSections;
-import com.selectiverendering.render.RebuildScheduler;
+import com.selectiverendering.render.hiding.HiddenSections;
+import com.selectiverendering.render.hiding.RebuildScheduler;
 import com.selectiverendering.util.Log;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -15,11 +15,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** 编辑选区角点及已保存选区，并同步配置、区块重建和光照。 */
+/** 编辑魔杖的双角点、选区和选区里的范围，并同步配置、区块重建和光照。 */
 public final class RegionEditor {
 	private static final int MAX_SUBTRACT_FRAGMENTS = 4096;
 
 	private RegionEditor() {
+	}
+
+	/** 射线命中的范围，以及它所属的选区。 */
+	public record Hit(Region region, Area area) {
 	}
 
 	public static BlockPos getCorner(int index) {
@@ -49,36 +53,49 @@ public final class RegionEditor {
 		return SelectiveRenderingManager.selectedCorner == index;
 	}
 
-	/** 选择射线碰到的最近角点，仅更新编辑状态。 */
-	public static boolean selectCorner(Vec3 start, Vec3 end) {
-		int closest;
-
+	/** 中键：对着角点选角点，对着选区选选区，对着空气清空选择。 */
+	public static void selectAlongRay(Vec3 start, Vec3 end) {
 		synchronized (SelectiveRenderingManager.LOCK) {
-			closest = -1;
-			double closestDistance = Double.MAX_VALUE;
-
-			for (int index = 0; index < 2; index++) {
-				BlockPos pos = getCorner(index);
-				if (pos == null) {
-					continue;
-				}
-
-				Optional<Vec3> hit = cornerBox(pos).clip(start, end);
-				if (hit.isEmpty()) {
-					continue;
-				}
-
-				double distance = start.distanceToSqr(hit.get());
-				if (distance < closestDistance) {
-					closestDistance = distance;
-					closest = index;
-				}
+			int corner = closestCorner(start, end);
+			if (corner >= 0) {
+				SelectiveRenderingManager.selectedCorner = corner;
+				return;
 			}
 
-			SelectiveRenderingManager.selectedCorner = closest;
+			Hit hit = pickArea(start, end);
+			if (hit != null) {
+				SelectiveRenderingManager.selectedRegionId = hit.region().id();
+				return;
+			}
+
+			SelectiveRenderingManager.selectedCorner = -1;
+			SelectiveRenderingManager.selectedRegionId = null;
+		}
+	}
+
+	private static int closestCorner(Vec3 start, Vec3 end) {
+		int closest = -1;
+		double closestDistance = Double.MAX_VALUE;
+
+		for (int index = 0; index < 2; index++) {
+			BlockPos pos = getCorner(index);
+			if (pos == null) {
+				continue;
+			}
+
+			Optional<Vec3> hit = cornerBox(pos).clip(start, end);
+			if (hit.isEmpty()) {
+				continue;
+			}
+
+			double distance = start.distanceToSqr(hit.get());
+			if (distance < closestDistance) {
+				closestDistance = distance;
+				closest = index;
+			}
 		}
 
-		return closest >= 0;
+		return closest;
 	}
 
 	private static AABB cornerBox(BlockPos pos) {
@@ -111,135 +128,55 @@ public final class RegionEditor {
 		}
 	}
 
-	public static boolean addRegionFromSelection() {
+	@Nullable
+	public static Area selection() {
 		BlockPos first = SelectiveRenderingManager.corner1;
 		BlockPos second = SelectiveRenderingManager.corner2;
-		if (first == null || second == null) {
-			return false;
-		}
 
-		return addRegion(Region.of(first, second));
+		return first == null || second == null ? null : Area.of(first, second);
 	}
 
-	public static int addRegions(List<Region> boxes) {
-		if (boxes.isEmpty()) {
-			return 0;
-		}
+	public static boolean addAreaFromSelection() {
+		Area selection = selection();
+		return selection != null && addAreas(List.of(selection)) > 0;
+	}
 
-		int added = 0;
+	/** 有选中的选区就并入它，否则建一个新选区。返回新增的范围数。 */
+	public static int addAreas(List<Area> areas) {
+		List<Area> added = new ArrayList<>();
 
 		synchronized (SelectiveRenderingManager.LOCK) {
-			for (Region box : boxes) {
-				if (!SelectiveRenderingManager.REGIONS.contains(box)) {
-					SelectiveRenderingManager.REGIONS.add(box);
-					added++;
+			Region selected = SelectiveRenderingManager.selectedRegion();
+			List<Area> existing = selected == null ? List.of() : selected.areas();
+
+			for (Area area : areas) {
+				if (!existing.contains(area) && !added.contains(area)) {
+					added.add(area);
 				}
 			}
 
-			if (added == 0) {
+			if (added.isEmpty()) {
 				return 0;
 			}
 
+			if (selected == null) {
+				SelectiveRenderingManager.REGIONS.add(Region.create(added));
+			}
+			else {
+				List<Area> merged = new ArrayList<>(existing);
+				merged.addAll(added);
+				SelectiveRenderingManager.REGIONS.set(SelectiveRenderingManager.REGIONS.indexOf(selected), selected.withAreas(merged));
+			}
+
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.debug("[state] {} region(s) recorded", added);
-
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
-			for (Region box : boxes) {
-				HiddenSections.mark(box.box());
-			}
-
-			LightSuppression.relight();
-		}
-
-		return added;
+		Log.debug("[state] {} area(s) added", added.size());
+		changed(added, List.of(), false);
+		return added.size();
 	}
 
-	@Nullable
-	public static Region selection() {
-		BlockPos first = SelectiveRenderingManager.corner1;
-		BlockPos second = SelectiveRenderingManager.corner2;
-
-		return first == null || second == null ? null : Region.of(first, second);
-	}
-
-	/** 从已有选区中减去 cuts；碎片数超限时放弃操作。 */
-	public static boolean subtractRegions(List<Region> cuts) {
-		if (cuts.isEmpty()) {
-			return false;
-		}
-
-		int before;
-		int kept;
-
-		synchronized (SelectiveRenderingManager.LOCK) {
-			if (SelectiveRenderingManager.REGIONS.isEmpty()) {
-				return false;
-			}
-
-			before = SelectiveRenderingManager.REGIONS.size();
-
-			List<Region> current = new ArrayList<>(SelectiveRenderingManager.REGIONS);
-
-			for (Region cut : cuts) {
-				List<Region> next = new ArrayList<>(current.size() + 4);
-
-				for (Region region : current) {
-					next.addAll(region.subtract(cut));
-				}
-
-				if (next.size() > MAX_SUBTRACT_FRAGMENTS) {
-					Log.warn("[state] 裁剪产生的碎片过多（>{}），已放弃：选区形状过于破碎", MAX_SUBTRACT_FRAGMENTS);
-					return false;
-				}
-
-				current = next;
-			}
-
-			SelectiveRenderingManager.REGIONS.clear();
-			for (Region region : current) {
-				if (!SelectiveRenderingManager.REGIONS.contains(region)) {
-					SelectiveRenderingManager.REGIONS.add(region);
-				}
-			}
-
-			kept = SelectiveRenderingManager.REGIONS.size();
-			SelectiveRenderingManager.commitAndRemember();
-		}
-
-		Log.debug("[state] regions clipped by recorder: {} -> {}", before, kept);
-
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
-			// 裁剪未保留被移除的范围，需全量重建。
-			RebuildScheduler.rebuildChunks();
-		}
-
-		return true;
-	}
-
-	public static boolean addRegion(Region newRegion) {
-		synchronized (SelectiveRenderingManager.LOCK) {
-			if (SelectiveRenderingManager.REGIONS.contains(newRegion)) {
-				Log.warn("[state] region already added: {}", newRegion.toSource());
-				return false;
-			}
-
-			SelectiveRenderingManager.REGIONS.add(newRegion);
-			SelectiveRenderingManager.commitAndRemember();
-		}
-
-		Log.debug("[state] region added: {}", newRegion.toSource());
-
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
-			HiddenSections.mark(newRegion.box());
-			LightSuppression.relight();
-		}
-
-		return true;
-	}
-
-	/** 用 updated 替换 old（按几何定位）；范围或开关变了都会重建并重算光照。 */
+	/** 用 updated 替换 old（按 id 定位）；范围、方块开关或本地方块名单变了才会重建并重算光照。 */
 	public static boolean updateRegion(Region old, Region updated) {
 		synchronized (SelectiveRenderingManager.LOCK) {
 			int index = SelectiveRenderingManager.REGIONS.indexOf(old);
@@ -247,81 +184,117 @@ public final class RegionEditor {
 				return false;
 			}
 
-			int clash = SelectiveRenderingManager.REGIONS.indexOf(updated);
-			if (clash >= 0 && clash != index) {
-				return false;
-			}
-
 			SelectiveRenderingManager.REGIONS.set(index, updated);
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		boolean blocksChanged = !old.min().equals(updated.min()) || !old.max().equals(updated.max())
+		boolean blocksChanged = !old.areas().equals(updated.areas())
 			|| old.options().blocks() != updated.options().blocks()
 			|| !old.options().ruleSources().equals(updated.options().ruleSources());
 
-		if (blocksChanged && SelectiveRenderingManager.getMode().usesRegion()) {
-			HiddenSections.mark(old.box());
-			HiddenSections.mark(updated.box());
-
-			LightSuppression.retire(List.of(old));
-			LightSuppression.relight();
+		if (blocksChanged) {
+			List<Area> touched = new ArrayList<>(old.areas());
+			touched.addAll(updated.areas());
+			changed(touched, old.areas(), false);
 		}
 
 		return true;
 	}
 
-	public static boolean removeRegionAt(BlockPos pos) {
+	/** 把一个范围从选区里独立出去，成为新的选区，保留原选区的设置。只剩一个范围时不能独立。 */
+	public static boolean detachArea(Region region, Area area) {
 		synchronized (SelectiveRenderingManager.LOCK) {
-			return removeRegions(SelectiveRenderingManager.REGIONS.stream().filter(added -> added.contains(pos)).toList());
+			int index = SelectiveRenderingManager.REGIONS.indexOf(region);
+			if (index < 0 || region.areas().size() < 2 || !region.areas().contains(area)) {
+				return false;
+			}
+
+			List<Area> rest = new ArrayList<>(region.areas());
+			rest.remove(area);
+
+			Region detached = new Region(java.util.UUID.randomUUID(), Region.randomColor(), List.of(area), region.options());
+
+			SelectiveRenderingManager.REGIONS.set(index, region.withAreas(rest));
+			SelectiveRenderingManager.REGIONS.add(index + 1, detached);
+			SelectiveRenderingManager.commitAndRemember();
 		}
+
+		return true;
+	}
+
+	/** 把 source 的所有范围并入 target，设置以 target 为准，名单取并集；source 随即消失。 */
+	public static boolean mergeRegion(Region source, Region target) {
+		if (source.equals(target)) {
+			return false;
+		}
+
+		synchronized (SelectiveRenderingManager.LOCK) {
+			int sourceIndex = SelectiveRenderingManager.REGIONS.indexOf(source);
+			int targetIndex = SelectiveRenderingManager.REGIONS.indexOf(target);
+			if (sourceIndex < 0 || targetIndex < 0) {
+				return false;
+			}
+
+			SelectiveRenderingManager.REGIONS.set(targetIndex, Region.merge(target, source));
+			SelectiveRenderingManager.REGIONS.remove(source);
+
+			if (source.id().equals(SelectiveRenderingManager.selectedRegionId)) {
+				SelectiveRenderingManager.selectedRegionId = target.id();
+			}
+
+			SelectiveRenderingManager.commitAndRemember();
+		}
+
+		changed(source.areas(), source.areas(), false);
+		return true;
 	}
 
 	/** 删除指定选区并保存、重建及还原光照。 */
 	public static boolean removeRegions(List<Region> targets) {
-		List<Region> dropped;
+		List<Area> dropped = new ArrayList<>();
 
 		synchronized (SelectiveRenderingManager.LOCK) {
-			dropped = targets.stream().filter(SelectiveRenderingManager.REGIONS::contains).toList();
-			if (dropped.isEmpty()) {
+			boolean any = false;
+
+			for (Region region : targets) {
+				if (SelectiveRenderingManager.REGIONS.remove(region)) {
+					dropped.addAll(region.areas());
+					any = true;
+				}
+			}
+
+			if (!any) {
 				return false;
 			}
 
-			SelectiveRenderingManager.REGIONS.removeAll(dropped);
+			dropSelectionIfGone();
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.debug("[state] {} region(s) removed", dropped.size());
-
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
-			for (Region region : dropped) {
-				HiddenSections.mark(region.box());
-			}
-
-			LightSuppression.retire(dropped);
-			LightSuppression.relight();
-		}
-
+		Log.debug("[state] {} area(s) removed with their regions", dropped.size());
+		changed(dropped, dropped, false);
 		return true;
 	}
 
-	/** 返回射线命中的最近选区，未命中时返回 null。 */
+	/** 返回射线命中的最近范围，未命中时返回 null。 */
 	@Nullable
-	public static Region pickRegion(Vec3 start, Vec3 end) {
+	public static Hit pickArea(Vec3 start, Vec3 end) {
 		synchronized (SelectiveRenderingManager.LOCK) {
-			Region closest = null;
+			Hit closest = null;
 			double closestDistance = Double.MAX_VALUE;
 
 			for (Region region : SelectiveRenderingManager.REGIONS) {
-				Optional<Vec3> hit = region.box().clip(start, end);
-				if (hit.isEmpty()) {
-					continue;
-				}
+				for (Area area : region.areas()) {
+					Optional<Vec3> hit = area.box().clip(start, end);
+					if (hit.isEmpty()) {
+						continue;
+					}
 
-				double distance = start.distanceToSqr(hit.get());
-				if (distance < closestDistance) {
-					closestDistance = distance;
-					closest = region;
+					double distance = start.distanceToSqr(hit.get());
+					if (distance < closestDistance) {
+						closestDistance = distance;
+						closest = new Hit(region, area);
+					}
 				}
 			}
 
@@ -329,56 +302,129 @@ public final class RegionEditor {
 		}
 	}
 
-	/** 删除射线命中的最近选区，未命中则添加当前选区。 */
-	public static boolean toggleRegionAlongRay(Vec3 start, Vec3 end) {
-		Region hit = pickRegion(start, end);
-		return hit != null ? removeRegions(List.of(hit)) : addRegionFromSelection();
+	/** 删除射线命中的最近范围（选区的最后一个范围被删掉时选区也消失），未命中则添加当前选区。 */
+	public static boolean toggleAreaAlongRay(Vec3 start, Vec3 end) {
+		Hit hit = pickArea(start, end);
+		return hit != null ? removeArea(hit.region(), hit.area()) : addAreaFromSelection();
 	}
 
-	/** 用当前双角点选区裁剪已保存选区，保留当前角点。 */
-	public static boolean clipRegions() {
-		BlockPos first = SelectiveRenderingManager.corner1;
-		BlockPos second = SelectiveRenderingManager.corner2;
-		if (first == null || second == null) {
-			return false;
+	public static boolean removeArea(Region region, Area area) {
+		synchronized (SelectiveRenderingManager.LOCK) {
+			int index = SelectiveRenderingManager.REGIONS.indexOf(region);
+			if (index < 0 || !region.areas().contains(area)) {
+				return false;
+			}
+
+			List<Area> rest = new ArrayList<>(region.areas());
+			rest.remove(area);
+
+			if (rest.isEmpty()) {
+				SelectiveRenderingManager.REGIONS.remove(index);
+				dropSelectionIfGone();
+			}
+			else {
+				SelectiveRenderingManager.REGIONS.set(index, region.withAreas(rest));
+			}
+
+			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Region cut = Region.of(first, second);
-		List<Region> before;
-		int kept;
+		changed(List.of(area), List.of(area), false);
+		return true;
+	}
+
+	/** 用当前双角点选区裁剪所有选区，裁出的新部分仍留在原来的选区里，保留当前角点。 */
+	public static boolean clipRegions() {
+		Area cut = selection();
+		return cut != null && cut(List.of(cut), true);
+	}
+
+	/** 记录器的裁剪模式：用记录到的范围裁剪所有选区。 */
+	public static boolean subtractAreas(List<Area> cuts) {
+		return !cuts.isEmpty() && cut(cuts, false);
+	}
+
+	/** local 为真时只重建被裁剪的范围，否则整体重建。 */
+	private static boolean cut(List<Area> cuts, boolean local) {
+		List<Area> before = new ArrayList<>();
 
 		synchronized (SelectiveRenderingManager.LOCK) {
 			if (SelectiveRenderingManager.REGIONS.isEmpty()) {
 				return false;
 			}
 
-			before = List.copyOf(SelectiveRenderingManager.REGIONS);
-			SelectiveRenderingManager.REGIONS.clear();
+			List<Region> next = new ArrayList<>();
+			int fragments = 0;
 
-			for (Region region : before) {
-				for (Region part : region.subtract(cut)) {
-					if (!SelectiveRenderingManager.REGIONS.contains(part)) {
-						SelectiveRenderingManager.REGIONS.add(part);
+			for (Region region : SelectiveRenderingManager.REGIONS) {
+				before.addAll(region.areas());
+
+				List<Area> current = region.areas();
+
+				for (Area cut : cuts) {
+					List<Area> after = new ArrayList<>(current.size() + 4);
+
+					for (Area area : current) {
+						after.addAll(area.subtract(cut));
 					}
+
+					current = after;
+				}
+
+				fragments += current.size();
+
+				if (!current.isEmpty()) {
+					next.add(region.withAreas(current));
 				}
 			}
 
-			kept = SelectiveRenderingManager.REGIONS.size();
+			if (fragments > MAX_SUBTRACT_FRAGMENTS) {
+				Log.warn("[state] 裁剪产生的碎片过多（>{}），已放弃：选区形状过于破碎", MAX_SUBTRACT_FRAGMENTS);
+				return false;
+			}
 
+			SelectiveRenderingManager.REGIONS.clear();
+			SelectiveRenderingManager.REGIONS.addAll(next);
+			dropSelectionIfGone();
 			SelectiveRenderingManager.commitAndRemember();
 		}
 
-		Log.debug("[state] regions clipped by {}: {} -> {}", cut.toSource(), before.size(), kept);
+		Log.debug("[state] regions clipped by {} area(s): {} area(s) before", cuts.size(), before.size());
+		changed(before, before, !local);
+		return true;
+	}
 
-		if (SelectiveRenderingManager.getMode().usesRegion()) {
-			for (Region region : before) {
-				HiddenSections.mark(region.box());
-			}
+	private static void dropSelectionIfGone() {
+		java.util.UUID id = SelectiveRenderingManager.selectedRegionId;
 
-			LightSuppression.retire(before);
-			LightSuppression.relight();
+		if (id != null && SelectiveRenderingManager.REGIONS.stream().noneMatch(region -> region.id().equals(id))) {
+			SelectiveRenderingManager.selectedRegionId = null;
+		}
+	}
+
+	/** 受影响的范围重建，被移走的范围还原光照；fullRebuild 时整体重建。 */
+	private static void changed(List<Area> touched, List<Area> retired, boolean fullRebuild) {
+		if (!SelectiveRenderingManager.getMode().usesRegion()) {
+			return;
 		}
 
-		return true;
+		if (fullRebuild) {
+			if (!retired.isEmpty()) {
+				LightSuppression.retire(retired);
+			}
+
+			RebuildScheduler.rebuildChunks();
+			return;
+		}
+
+		for (Area area : touched) {
+			HiddenSections.mark(area.box());
+		}
+
+		if (!retired.isEmpty()) {
+			LightSuppression.retire(retired);
+		}
+
+		LightSuppression.relight();
 	}
 }

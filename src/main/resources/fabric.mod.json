@@ -16,7 +16,7 @@
 			"com.selectiverendering.SelectiveRendering"
 		],
 		"modmenu": [
-			"com.selectiverendering.config.ModMenuIntegration"
+			"com.selectiverendering.config.entry.ModMenuIntegration"
 		]
 	},
 	"mixins": [

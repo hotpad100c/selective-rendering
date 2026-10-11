@@ -3,6 +3,7 @@ package com.selectiverendering.config;
 import java.util.List;
 
 import com.selectiverendering.SelectiveRenderingManager.Mode;
+import com.selectiverendering.config.entrypoint.ModConfigs;
 import fi.dy.masa.malilib.config.IConfigBase;
 import fi.dy.masa.malilib.gui.GuiBase;
 import fi.dy.masa.malilib.gui.GuiConfigsBase.ConfigOptionWrapper;
@@ -54,7 +55,7 @@ public final class WidgetModeRow extends WidgetConfigOption {
 		return super.isMouseOver(mouseX, mouseY) || (this.dropdown != null && this.dropdown.isMouseOver(mouseX, mouseY));
 	}
 
-	void drawOpenDropdown(GuiContext ctx, int mouseX, int mouseY) {
+	public void drawOpenDropdown(GuiContext ctx, int mouseX, int mouseY) {
 		if (this.dropdown != null && this.dropdown.isOpen()) {
 			this.dropdown.postRenderHovered(ctx, mouseX, mouseY, false);
 		}

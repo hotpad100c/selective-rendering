@@ -4,138 +4,163 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.TagParser;
-import net.minecraft.world.phys.AABB;
+import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
-/** 轴对齐的整数方块选区，包含 min 和 max 两端。相等性只看几何范围，不含 options。 */
-public record Region(BlockPos min, BlockPos max, RegionOptions options) {
-	public Region {
-		options = options == null ? RegionOptions.DEFAULT : options;
+/**
+ * 一个选区：一个或多个范围（{@link Area}）加上颜色和设置。身份由 id 决定，改范围或设置得到的是同一个选区的新版本；
+ * 同一个选区的所有范围共用一份设置。
+ */
+public final class Region {
+	private final UUID id;
+	private final int color;
+	private final List<Area> areas;
+	private final RegionOptions options;
+	private final Area bounds;
+
+	private volatile List<RegionOutline.Segment> outline;
+
+	public Region(UUID id, int color, List<Area> areas, RegionOptions options) {
+		if (areas.isEmpty()) {
+			throw new IllegalArgumentException("A region needs at least one area");
+		}
+
+		this.id = id;
+		this.color = color & 0xFFFFFF;
+		this.areas = List.copyOf(areas);
+		this.options = options == null ? RegionOptions.DEFAULT : options;
+		this.bounds = boundsOf(this.areas);
 	}
 
-	public Region(BlockPos min, BlockPos max) {
-		this(min, max, RegionOptions.DEFAULT);
+	public static Region create(List<Area> areas) {
+		return new Region(UUID.randomUUID(), randomColor(), areas, RegionOptions.DEFAULT);
+	}
+
+	public static Region create(Area area) {
+		return create(List.of(area));
+	}
+
+	public static int randomColor() {
+		return Mth.hsvToRgb(ThreadLocalRandom.current().nextFloat(), 0.65F, 1.0F);
+	}
+
+	public UUID id() {
+		return id;
+	}
+
+	public int color() {
+		return color;
+	}
+
+	public List<Area> areas() {
+		return areas;
+	}
+
+	public RegionOptions options() {
+		return options;
+	}
+
+	/** 所有范围的包围盒。 */
+	public Area bounds() {
+		return bounds;
+	}
+
+	public Region withAreas(List<Area> value) {
+		return new Region(id, color, value, options);
 	}
 
 	public Region withOptions(RegionOptions value) {
-		return new Region(min, max, value);
+		return new Region(id, color, areas, value);
+	}
+
+	public Region withColor(int value) {
+		return new Region(id, value, areas, options);
+	}
+
+	public boolean contains(BlockPos pos) {
+		if (!bounds.contains(pos)) {
+			return false;
+		}
+
+		for (Area area : areas) {
+			if (area.contains(pos)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public boolean contains(double x, double y, double z) {
+		if (!bounds.contains(x, y, z)) {
+			return false;
+		}
+
+		for (Area area : areas) {
+			if (area.contains(x, y, z)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public boolean intersectsSection(int sx, int sy, int sz) {
+		if (!bounds.intersectsSection(sx, sy, sz)) {
+			return false;
+		}
+
+		for (Area area : areas) {
+			if (area.intersectsSection(sx, sy, sz)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** 融合后的整体线框，第一次用到时才计算。 */
+	public List<RegionOutline.Segment> outline() {
+		List<RegionOutline.Segment> cached = outline;
+
+		if (cached == null) {
+			cached = RegionOutline.of(areas);
+			outline = cached;
+		}
+
+		return cached;
 	}
 
 	@Override
 	public boolean equals(Object other) {
-		return other instanceof Region region && min.equals(region.min) && max.equals(region.max);
+		return other instanceof Region region && id.equals(region.id);
 	}
 
 	@Override
 	public int hashCode() {
-		return 31 * min.hashCode() + max.hashCode();
+		return id.hashCode();
 	}
 
-	public static Region of(BlockPos first, BlockPos second) {
-		return new Region(
-			new BlockPos(
-				Math.min(first.getX(), second.getX()),
-				Math.min(first.getY(), second.getY()),
-				Math.min(first.getZ(), second.getZ())
-			),
-			new BlockPos(
-				Math.max(first.getX(), second.getX()),
-				Math.max(first.getY(), second.getY()),
-				Math.max(first.getZ(), second.getZ())
-			)
-		);
-	}
-
-	public AABB box() {
-		return new AABB(
-			min.getX(), min.getY(), min.getZ(),
-			max.getX() + 1.0, max.getY() + 1.0, max.getZ() + 1.0
-		);
-	}
-
-	/** 从选区中减去 cut，返回剩余的至多六个长方体。 */
-	public List<Region> subtract(Region cut) {
-		Region overlap = overlap(cut);
-		if (overlap == null) {
-			return List.of(this);
-		}
-
-		List<Region> parts = new ArrayList<>();
-		BlockPos low = overlap.min();
-		BlockPos high = overlap.max();
-
-		if (min.getX() < low.getX()) {
-			parts.add(new Region(min, new BlockPos(low.getX() - 1, max.getY(), max.getZ()), options));
-		}
-
-		if (max.getX() > high.getX()) {
-			parts.add(new Region(new BlockPos(high.getX() + 1, min.getY(), min.getZ()), max, options));
-		}
-
-		int x1 = Math.max(min.getX(), low.getX());
-		int x2 = Math.min(max.getX(), high.getX());
-
-		if (min.getY() < low.getY()) {
-			parts.add(new Region(new BlockPos(x1, min.getY(), min.getZ()), new BlockPos(x2, low.getY() - 1, max.getZ()), options));
-		}
-
-		if (max.getY() > high.getY()) {
-			parts.add(new Region(new BlockPos(x1, high.getY() + 1, min.getZ()), new BlockPos(x2, max.getY(), max.getZ()), options));
-		}
-
-		int y1 = Math.max(min.getY(), low.getY());
-		int y2 = Math.min(max.getY(), high.getY());
-
-		if (min.getZ() < low.getZ()) {
-			parts.add(new Region(new BlockPos(x1, y1, min.getZ()), new BlockPos(x2, y2, low.getZ() - 1), options));
-		}
-
-		if (max.getZ() > high.getZ()) {
-			parts.add(new Region(new BlockPos(x1, y1, high.getZ() + 1), new BlockPos(x2, y2, max.getZ()), options));
-		}
-
-		return parts;
-	}
-
-	public boolean overlaps(Region other) {
-		return min.getX() <= other.max.getX() && max.getX() >= other.min.getX()
-			&& min.getY() <= other.max.getY() && max.getY() >= other.min.getY()
-			&& min.getZ() <= other.max.getZ() && max.getZ() >= other.min.getZ();
-	}
-
-	@Nullable
-	private Region overlap(Region other) {
-		if (!overlaps(other)) {
-			return null;
-		}
-
-		return new Region(
-			new BlockPos(
-				Math.max(min.getX(), other.min.getX()),
-				Math.max(min.getY(), other.min.getY()),
-				Math.max(min.getZ(), other.min.getZ())
-			),
-			new BlockPos(
-				Math.min(max.getX(), other.max.getX()),
-				Math.min(max.getY(), other.max.getY()),
-				Math.min(max.getZ(), other.max.getZ())
-			)
-		);
-	}
-
-	public boolean contains(BlockPos pos) {
-		return pos.getX() >= min.getX() && pos.getX() <= max.getX()
-			&& pos.getY() >= min.getY() && pos.getY() <= max.getY()
-			&& pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
-	}
-
-	/** 序列化为 minX,minY,minZ:maxX,maxY,maxZ，选区别设置由{SNBT}存储。 */
+	/** 范围用 ; 分隔，设置和颜色在末尾的 {SNBT} 里：minX,minY,minZ:maxX,maxY,maxZ;…{color:…}。 */
 	public String toSource() {
+		StringBuilder source = new StringBuilder();
+
+		for (Area area : areas) {
+			if (!source.isEmpty()) {
+				source.append(';');
+			}
+
+			source.append(area.toSource());
+		}
+
 		CompoundTag tag = options.toTag();
-		return source(min) + ":" + source(max) + (tag.isEmpty() ? "" : tag.toString());
+		tag.putInt("color", color);
+		return source + tag.toString();
 	}
 
 	@Nullable
@@ -147,10 +172,13 @@ public record Region(BlockPos min, BlockPos max, RegionOptions options) {
 		String text = input.trim();
 		int brace = text.indexOf('{');
 		RegionOptions options = RegionOptions.DEFAULT;
+		int color = randomColor();
 
 		if (brace >= 0) {
 			try {
-				options = RegionOptions.fromTag(TagParser.parseCompoundFully(text.substring(brace)));
+				CompoundTag tag = TagParser.parseCompoundFully(text.substring(brace));
+				options = RegionOptions.fromTag(tag);
+				color = tag.getIntOr("color", color);
 			}
 			catch (CommandSyntaxException e) {
 				return null;
@@ -159,36 +187,54 @@ public record Region(BlockPos min, BlockPos max, RegionOptions options) {
 			text = text.substring(0, brace);
 		}
 
-		String[] corners = text.split(":", 2);
-		if (corners.length != 2) {
-			return null;
+		List<Area> areas = new ArrayList<>();
+
+		for (String part : text.split(";")) {
+			if (part.isBlank()) {
+				continue;
+			}
+
+			Area area = Area.parse(part);
+			if (area == null) {
+				return null;
+			}
+
+			areas.add(area);
 		}
 
-		BlockPos first = corner(corners[0]);
-		BlockPos second = corner(corners[1]);
-		return first == null || second == null ? null : of(first, second).withOptions(options);
+		return areas.isEmpty() ? null : new Region(UUID.randomUUID(), color, areas, options);
 	}
 
-	@Nullable
-	private static BlockPos corner(String text) {
-		String[] parts = text.trim().split(",");
-		if (parts.length != 3) {
-			return null;
+	/** 把 source 并入 target：范围合在一起；设置以 target 为准，名单取并集，勾选项丢弃 source 的。 */
+	public static Region merge(Region target, Region source) {
+		List<Area> areas = new ArrayList<>(target.areas);
+
+		for (Area area : source.areas) {
+			if (!areas.contains(area)) {
+				areas.add(area);
+			}
 		}
 
-		try {
-			return new BlockPos(
-				Integer.parseInt(parts[0].trim()),
-				Integer.parseInt(parts[1].trim()),
-				Integer.parseInt(parts[2].trim())
-			);
-		}
-		catch (NumberFormatException e) {
-			return null;
-		}
+		return target.withAreas(areas).withOptions(target.options.mergedWith(source.options));
 	}
 
-	private static String source(BlockPos pos) {
-		return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+	private static Area boundsOf(List<Area> areas) {
+		int minX = Integer.MAX_VALUE;
+		int minY = Integer.MAX_VALUE;
+		int minZ = Integer.MAX_VALUE;
+		int maxX = Integer.MIN_VALUE;
+		int maxY = Integer.MIN_VALUE;
+		int maxZ = Integer.MIN_VALUE;
+
+		for (Area area : areas) {
+			minX = Math.min(minX, area.min().getX());
+			minY = Math.min(minY, area.min().getY());
+			minZ = Math.min(minZ, area.min().getZ());
+			maxX = Math.max(maxX, area.max().getX());
+			maxY = Math.max(maxY, area.max().getY());
+			maxZ = Math.max(maxZ, area.max().getZ());
+		}
+
+		return new Area(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ));
 	}
 }

@@ -5,7 +5,7 @@ import com.mojang.blaze3d.platform.Window;
 import com.selectiverendering.SelectiveRendering;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.compat.Platform;
-import com.selectiverendering.config.ModHotkeys;
+import com.selectiverendering.config.entrypoint.ModHotkeys;
 import com.selectiverendering.matchingrule.BlockListMessage;
 import com.selectiverendering.region.CameraRay;
 import com.selectiverendering.region.RegionEditor;
@@ -23,6 +23,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -30,10 +31,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** 处理魔杖的选点、选区编辑、规则切换和滚轮操作。 */
 @Mixin(value = MouseHandler.class, priority = 2000)
 public class MouseHandlerMixin {
-	private static final int ACTION_PRESS = 1;
-	private static final float STEEP_PITCH = 60.0F;
+	@Unique
+    private static final int ACTION_PRESS = 1;
+	@Unique
+    private static final float STEEP_PITCH = 60.0F;
 
-	private static final double MAX_TRACE_DISTANCE = 200.0;
+	@Unique
+    private static final double MAX_TRACE_DISTANCE = 200.0;
 
 	@Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onScroll(long window, double xOffset, double yOffset, CallbackInfo ci) {
@@ -86,14 +90,14 @@ public class MouseHandlerMixin {
 		}
 
 		if (buttonInfo.button() == Platform.MOUSE_MIDDLE) {
-			RegionEditor.selectCorner(rayStart(minecraft), rayEnd(minecraft));
+			RegionEditor.selectAlongRay(rayStart(minecraft), rayEnd(minecraft));
 			ci.cancel();
 			return;
 		}
 
 		if (ModHotkeys.regionHeld()) {
 			if (buttonInfo.button() == Platform.MOUSE_LEFT) {
-				RegionEditor.toggleRegionAlongRay(rayStart(minecraft), rayEnd(minecraft));
+				RegionEditor.toggleAreaAlongRay(rayStart(minecraft), rayEnd(minecraft));
 				ci.cancel();
 			}
 			else if (buttonInfo.button() == Platform.MOUSE_RIGHT) {
@@ -104,9 +108,8 @@ public class MouseHandlerMixin {
 			return;
 		}
 
-		HitResult trace = CameraRay.pick(minecraft, camera, MAX_TRACE_DISTANCE);
-
-		if (!(trace instanceof BlockHitResult hit) || hit.getType() == HitResult.Type.MISS) {
+        BlockHitResult hit = CameraRay.pick(minecraft, camera, MAX_TRACE_DISTANCE);
+        if (hit.getType() == HitResult.Type.MISS) {
 			return;
 		}
 

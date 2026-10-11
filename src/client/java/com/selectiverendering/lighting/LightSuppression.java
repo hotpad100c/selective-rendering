@@ -1,8 +1,9 @@
 package com.selectiverendering.lighting;
 
 import com.selectiverendering.SelectiveRenderingManager;
+import com.selectiverendering.region.Area;
 import com.selectiverendering.region.Region;
-import com.selectiverendering.render.Alpha;
+import com.selectiverendering.render.hiding.AlphaGetter;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import net.minecraft.client.Minecraft;
@@ -45,7 +46,7 @@ public final class LightSuppression {
 	private static final LongLinkedOpenHashSet PENDING = new LongLinkedOpenHashSet();
 
 	/** 已删除或裁剪、仍需还原光照的历史选区。 */
-	private static final List<Region> RETIRED_REGIONS = new ArrayList<>();
+	private static final List<Area> RETIRED_AREAS = new ArrayList<>();
 
 	/** 全局扫描队列：ALL 还原所有相关方块，FILTERED 仅检查当前隐藏方块。 */
 	private static final LongLinkedOpenHashSet GLOBAL_ALL = new LongLinkedOpenHashSet();
@@ -77,7 +78,7 @@ public final class LightSuppression {
 			return Blocks.AIR.defaultBlockState();
 		}
 
-		return Alpha.alphaNow(state, pos, false) >= 0 ? Blocks.AIR.defaultBlockState() : state;
+		return AlphaGetter.alphaNow(state, pos, false) >= 0 ? Blocks.AIR.defaultBlockState() : state;
 	}
 
 
@@ -105,13 +106,13 @@ public final class LightSuppression {
 
 		lastGlobal = global;
 
-		List<Region> targets = targets();
+		List<Area> targets = targets();
 		if (targets.isEmpty()) {
 			return;
 		}
 
 		synchronized (LOCK) {
-			for (Region region : targets) {
+			for (Area region : targets) {
 				int minChunkX = (region.min().getX() - MARGIN) >> 4;
 				int maxChunkX = (region.max().getX() + MARGIN) >> 4;
 				int minChunkZ = (region.min().getZ() - MARGIN) >> 4;
@@ -127,11 +128,11 @@ public final class LightSuppression {
 	}
 
 	/** 记录已移除、仍需还原光照的选区。 */
-	public static void retire(List<Region> regions) {
+	public static void retire(List<Area> regions) {
 		synchronized (LOCK) {
-			for (Region region : regions) {
-				if (!RETIRED_REGIONS.contains(region)) {
-					RETIRED_REGIONS.add(region);
+			for (Area region : regions) {
+				if (!RETIRED_AREAS.contains(region)) {
+					RETIRED_AREAS.add(region);
 				}
 			}
 		}
@@ -288,7 +289,7 @@ public final class LightSuppression {
 
 		flushGlobal(level);
 
-		List<Region> targets = targets();
+		List<Area> targets = targets();
 
 		synchronized (LOCK) {
 			int budget = BUDGET_PER_FLUSH;
@@ -395,12 +396,12 @@ public final class LightSuppression {
 	}
 
 	/** 扫描区块中与选区相交的列并提交光照检查，返回剩余预算。 */
-	private static int scanChunk(ClientLevel level, LevelChunk chunk, List<Region> targets, int budget) {
+	private static int scanChunk(ClientLevel level, LevelChunk chunk, List<Area> targets, int budget) {
 		int baseX = chunk.getPos().getMinBlockX();
 		int baseZ = chunk.getPos().getMinBlockZ();
 
-		List<Region> local = new ArrayList<>();
-		for (Region region : targets) {
+		List<Area> local = new ArrayList<>();
+		for (Area region : targets) {
 			if (region.max().getX() + MARGIN >= baseX && region.min().getX() - MARGIN <= baseX + 15
 				&& region.max().getZ() + MARGIN >= baseZ && region.min().getZ() - MARGIN <= baseZ + 15) {
 				local.add(region);
@@ -417,7 +418,7 @@ public final class LightSuppression {
 			int top = Integer.MIN_VALUE;
 			int bottom = Integer.MAX_VALUE;
 
-			for (Region region : local) {
+			for (Area region : local) {
 				if (x < region.min().getX() - MARGIN || x > region.max().getX() + MARGIN
 					|| z < region.min().getZ() - MARGIN || z > region.max().getZ() + MARGIN) {
 					continue;
@@ -444,14 +445,17 @@ public final class LightSuppression {
 		return budget;
 	}
 
-	private static List<Region> targets() {
+	private static List<Area> targets() {
 		List<Region> regions = SelectiveRenderingManager.blockRegions();
 
 		synchronized (LOCK) {
-			List<Region> targets = new ArrayList<>(regions.size() + RETIRED_REGIONS.size());
-			targets.addAll(regions);
+			List<Area> targets = new ArrayList<>(regions.size() + RETIRED_AREAS.size());
 
-			for (Region region : RETIRED_REGIONS) {
+			for (Region region : regions) {
+				targets.addAll(region.areas());
+			}
+
+			for (Area region : RETIRED_AREAS) {
 				if (!targets.contains(region)) {
 					targets.add(region);
 				}

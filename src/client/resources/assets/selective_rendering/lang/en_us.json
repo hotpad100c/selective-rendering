@@ -64,7 +64,7 @@
   "selective_rendering.hint.block_id": "%s + left click: add / remove block",
   "selective_rendering.hint.block_state": "%s + right click: add / remove block with states",
   "selective_rendering.hint.mode": "Left Ctrl + scroll: cycle mode",
-  "selective_rendering.hint.select_corner": "Middle click: select the corner",
+  "selective_rendering.hint.select_corner": "Middle click: select a corner or region, air clears",
   "selective_rendering.hint.move_corner": "Left Alt + scroll: move the selected corner",
   "selective_rendering.hint.record": "%s: record changes",
   "selective_rendering.hint.config": "%s: open config",
@@ -94,5 +94,14 @@
   "selective_rendering.config.comment.region_particle_types": "Particles this selection lists, used by the \"listed / unlisted\" modes, e.g. minecraft:flame",
   "selective_rendering.config.region_edit": "Edit",
   "selective_rendering.config.region_back": "Back",
-  "selective_rendering.config.region_title": "Selection #%s"
+  "selective_rendering.config.region_title": "Selection #%s",
+  "selective_rendering.config.region_area": "Area",
+  "selective_rendering.config.region_areas": "area(s)",
+  "selective_rendering.config.region_detach": "Split off",
+  "selective_rendering.config.region_detach_tip": "Make this area its own region, keeping the settings",
+  "selective_rendering.config.region_detach_blocked": "A region needs at least one area",
+  "selective_rendering.config.region_merge": "Merge into",
+  "selective_rendering.config.region_merge_apply": "Merge",
+  "selective_rendering.config.region_merge_tip": "Move every area into the chosen region. Its settings win; lists are combined",
+  "selective_rendering.config.region_merge_none": "No other region"
 }

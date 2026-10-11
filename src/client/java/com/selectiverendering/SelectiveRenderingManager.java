@@ -1,16 +1,13 @@
 package com.selectiverendering;
 
-import com.selectiverendering.config.ModConfig;
-import com.selectiverendering.config.Preset;
-import com.selectiverendering.lighting.LightSuppression;
+import com.selectiverendering.config.entrypoint.ModConfig;
+import com.selectiverendering.config.presets.Preset;
+import com.selectiverendering.config.region.RenderConfig;
 import com.selectiverendering.matchingrule.BlockMatchRule;
-import com.selectiverendering.recording.BlockChangeRecorder;
+import com.selectiverendering.region.Area;
 import com.selectiverendering.region.Region;
 import com.selectiverendering.region.RegionOptions;
-import com.selectiverendering.region.RegionEditor;
-import com.selectiverendering.render.Alpha;
-import com.selectiverendering.render.HiddenSections;
-import com.selectiverendering.render.RebuildScheduler;
+import com.selectiverendering.render.hiding.RebuildScheduler;
 import com.selectiverendering.util.Log;
 import net.minecraft.core.BlockPos;
 import fi.dy.masa.malilib.config.IConfigOptionListEntry;
@@ -241,6 +238,9 @@ public final class SelectiveRenderingManager {
 	/** 当前选中的角点，-1 表示未选中；仅影响编辑界面。 */
 	public static volatile int selectedCorner = -1;
 
+	/** 魔杖中键选中的选区，不保存。 */
+	public static volatile java.util.UUID selectedRegionId;
+
 	private SelectiveRenderingManager() {
 	}
 
@@ -338,6 +338,21 @@ public final class SelectiveRenderingManager {
 
 	public static List<Region> regions() {
 		return config.regions();
+	}
+
+	/** 当前选中的选区；没有选中或已被删除时为 null。 */
+	public static Region selectedRegion() {
+		java.util.UUID id = selectedRegionId;
+
+		if (id != null) {
+			for (Region region : config.regions()) {
+				if (region.id().equals(id)) {
+					return region;
+				}
+			}
+		}
+
+		return null;
 	}
 
 	public static List<Region> blockRegions() {
@@ -650,16 +665,17 @@ public final class SelectiveRenderingManager {
 		return pos == null ? null : new int[] {pos.getX(), pos.getY(), pos.getZ()};
 	}
 
-	private static int[] toArray(Region region) {
+	private static int[] toArray(Area area) {
 		return new int[] {
-			region.min().getX(), region.min().getY(), region.min().getZ(),
-			region.max().getX(), region.max().getY(), region.max().getZ()
+			area.min().getX(), area.min().getY(), area.min().getZ(),
+			area.max().getX(), area.max().getY(), area.max().getZ()
 		};
 	}
 
 	private static ModConfig.RegionEntry toEntry(Region region) {
 		ModConfig.RegionEntry entry = new ModConfig.RegionEntry();
-		entry.box = toArray(region);
+		entry.areas = region.areas().stream().map(SelectiveRenderingManager::toArray).collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+		entry.color = region.color();
 		entry.blocks = region.options().blocks();
 		entry.entities = region.options().entities();
 		entry.particles = region.options().particles();
@@ -670,16 +686,40 @@ public final class SelectiveRenderingManager {
 	}
 
 	private static Region toRegion(ModConfig.RegionEntry entry) {
-		Region box = entry == null ? null : toRegion(entry.box);
-		if (box == null) {
+		if (entry == null) {
 			return null;
 		}
 
-		return box.withOptions(new RegionOptions(entry.blocks, entry.entities, entry.particles, entry.rules, entry.entityTypes, entry.particleTypes));
+		List<Area> areas = new ArrayList<>();
+
+		if (entry.areas != null) {
+			for (int[] values : entry.areas) {
+				Area area = toArea(values);
+				if (area != null) {
+					areas.add(area);
+				}
+			}
+		}
+
+		Area legacy = toArea(entry.box);
+		if (areas.isEmpty() && legacy != null) {
+			areas.add(legacy);
+		}
+
+		if (areas.isEmpty()) {
+			return null;
+		}
+
+		return new Region(
+			java.util.UUID.randomUUID(),
+			entry.color == null ? Region.randomColor() : entry.color,
+			areas,
+			new RegionOptions(entry.blocks, entry.entities, entry.particles, entry.rules, entry.entityTypes, entry.particleTypes)
+		);
 	}
 
-	private static Region toRegion(int[] values) {
-		return values == null || values.length != 6 ? null : new Region(
+	private static Area toArea(int[] values) {
+		return values == null || values.length != 6 ? null : new Area(
 			new BlockPos(values[0], values[1], values[2]),
 			new BlockPos(values[3], values[4], values[5])
 		);

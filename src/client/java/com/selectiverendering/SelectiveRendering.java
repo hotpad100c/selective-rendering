@@ -1,19 +1,16 @@
 package com.selectiverendering;
 
-import com.selectiverendering.config.ModConfig;
-import com.selectiverendering.config.ModConfigScreen;
+import com.selectiverendering.config.entrypoint.ModConfig;
+import com.selectiverendering.config.entrypoint.ModConfigScreen;
 import com.selectiverendering.util.ModCompat;
-import com.selectiverendering.util.Log;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.ClipContext;
 
 public class SelectiveRendering implements ClientModInitializer {
 	public static final String MOD_ID = "selective_rendering";

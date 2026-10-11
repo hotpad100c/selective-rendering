@@ -1,7 +1,7 @@
 package com.selectiverendering.blockentity;
 
-import com.selectiverendering.render.Alpha;
-import com.selectiverendering.render.MovingBlockRenderContext;
+import com.selectiverendering.render.hiding.AlphaGetter;
+import com.selectiverendering.render.hiding.MovingBlockRenderContext;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 
@@ -19,7 +19,7 @@ public final class BufferSourceHooks {
 			}
 
 			if (HiddenRenderTypes.isMarked(renderType)) {
-				return new AlphaVertexConsumer(consumer, Alpha.getHiddenAlpha());
+				return new AlphaVertexConsumer(consumer, AlphaGetter.getHiddenAlpha());
 			}
 		}
 

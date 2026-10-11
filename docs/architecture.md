@@ -32,7 +32,9 @@ src/
     ├── lighting/
     │   └── LightSuppression.java        ★ 光照：伪装(airIfHidden) + 标记 + 分批重算
     ├── region/                          选区与魔杖
-    │   ├── Region.java                  选区几何（含 subtract 挖洞）；相等性只看范围，附带 RegionOptions
+    │   ├── Area.java                    一个长方体范围（含 subtract 挖洞）
+    │   ├── Region.java                  选区 = 一组 Area + 随机颜色 + RegionOptions，身份由 id 决定
+    │   ├── RegionOutline.java           把一个选区的所有范围融合成整体线框
     │   ├── RegionOptions.java           选区自己的隐藏对象开关（方块/实体/粒子）和本地方块名单
     │   ├── RegionEditor.java            魔杖双角点 + 选区的增/删/裁/点选
     │   ├── RegionMerger.java            散点坐标 → 长方体（贪心合并）
@@ -227,9 +229,10 @@ synchronized (LOCK) {
 
 `ModConfigGui` 在全局配置项之后列出每个选区：`RegionRowConfig` 是个假配置项，由 `WidgetRegionRow` 画出
 「范围 / 编辑 / 删除」。点编辑打开 `GuiRegionConfigs`（和 MaLiLib 的列表编辑一样是个子界面，关闭或点返回回到
-选区列表并恢复滚动位置），里面是 `RegionConfigs` 生成的行：两个角点输入（`WidgetRegionCorner`）、
+选区列表并恢复滚动位置），里面是 `RegionConfigs` 生成的行：每个范围一组（`WidgetRegionArea` 的「独立 / 删除」加两个角点输入 `WidgetRegionCorner`）、
 一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，每项后跟一个方形小按钮），以及方块 / 实体 / 粒子三份本地名单
-（标准 `ConfigStringList`）。改动经 `RegionEditor.updateRegion` 替换 `REGIONS` 里的对应项，并触发重建和光照重算。
+（标准 `ConfigStringList`），最后是 `WidgetRegionMerge` 的「合并到」。改动经 `RegionEditor.updateRegion` 按 id 替换 `REGIONS` 里的
+对应项，并触发重建和光照重算。界面里持有的是 `RegionHandle`，每次按 id 取最新版本，所以独立 / 合并之后仍指向同一个选区。
 
 方块 / 实体 / 粒子名单（全局方块名单、记录名单、选区里的三份本地名单）是 `SuggestingStringList`，带一个 `SuggestKind`。
 它的行由 `WidgetSuggestingList` 画出，按钮打开 `GuiSuggestStringListEdit`：继承 malilib 的 `GuiStringListEdit`，
@@ -248,11 +251,20 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 
 - 方块判定只用 `blocks` 为真的选区（`RenderConfig.blockRegions`）；本地名单与全局名单取并集，
   只在选区内部且模式用到名单时生效（`RegionTargets.listedLocally`）。
-- 选区的字符串形式是 `minX,minY,minZ:maxX,maxY,maxZ`，设置与默认值不同时在末尾追加 SNBT：
-  `0,0,0:9,9,9{entities:1b,rules:["minecraft:stone"],entity_types:["minecraft:zombie"]}`
-  （键：`blocks` 默认真、`entities` / `particles` 默认假、`rules`、`entity_types`；只写与默认不同的项）。
+- 一个选区（`Region`）由一个或多个范围（`Area`）组成，裁剪出的碎片留在原来的选区里，范围全被裁掉时选区消失。
+  选区的字符串形式：范围之间用 `;` 分隔，末尾是设置和颜色的 SNBT：
+  `0,0,0:9,9,9;20,0,0:25,5,5{color:16711680,entities:1b,rules:["minecraft:stone"],entity_types:["minecraft:zombie"]}`
+  （键：`color`、`blocks` 默认真、`entities` / `particles` 默认假、`rules`、`entity_types`、`particle_types`；除 `color` 外只写与默认不同的项；
+  没有 `color` 时读取时随机分配）。存档里每个选区是 `areas`（范围数组）加 `color`；旧的单个 `box` 仍能读取。
   `Region.parse` 用 `TagParser` 解析，预设里的选区就是这种字符串，所以应用预设会保留每个选区的设置。
 - 角点是文本框 + `✔` 按钮，点按钮才应用，避免边输入边重建。
+- 线框：`LevelRendererMixin` 用选区的颜色画 `Region.outline()`（`RegionOutline`：按所有范围的边界坐标压成网格，对每条网格边
+  看周围四个格子，只保留融合形状的真实棱；格子数超过 40 万时退化成逐个范围画盒子），每个范围另画一层半透明填充。
+  选中的选区线更粗、填充更深。
+- 魔杖：中键对着角点选角点，对着选区选选区（`RegionEditor.selectAlongRay`），对着空气清空选择。选中了选区时，
+  选区键 + 左键添加的范围和记录器记录出的范围并入它（`addAreas`），没选中时新建选区；选区键 + 左键对着某个范围时删除这个范围。
+- 合并（`Region.merge`）：目标选区的设置优先，勾选项丢弃被合并方的，三份名单取并集（`RegionOptions.mergedWith`）；
+  独立（`RegionEditor.detachArea`）复制原选区的设置并分配新的随机颜色。
 - 实体：`mixin/entity/EntityRenderDispatcherMixin` 包装 `submit`，命中则完全隐藏（透明度 0）或套上
   `SelectiveSubmitNodeCollector`。选区可以带实体类型名单（空 = 所有实体）；名单里没有该类型的实体不受影响。
   透明度是按提交施加的：模型通过 tint 颜色的 alpha，自定义几何通过 `AlphaVertexConsumer`，不再标记共享的

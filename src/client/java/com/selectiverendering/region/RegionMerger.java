@@ -16,7 +16,7 @@ public final class RegionMerger {
 	private RegionMerger() {
 	}
 
-	public static List<Region> merge(Collection<BlockPos> positions) {
+	public static List<Area> merge(Collection<BlockPos> positions) {
 		if (positions.isEmpty()) {
 			return List.of();
 		}
@@ -27,7 +27,7 @@ public final class RegionMerger {
 			layers.computeIfAbsent(pos.getY(), y -> new HashSet<>()).add(pack(pos.getX(), pos.getZ()));
 		}
 
-		List<Region> boxes = new ArrayList<>();
+		List<Area> boxes = new ArrayList<>();
 
 		for (Map.Entry<Integer, Set<Long>> entry : layers.entrySet()) {
 			int minY = entry.getKey();
@@ -59,7 +59,7 @@ public final class RegionMerger {
 					above = layers.get(maxY + 1);
 				}
 
-				boxes.add(new Region(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ)));
+				boxes.add(new Area(new BlockPos(minX, minY, minZ), new BlockPos(maxX, maxY, maxZ)));
 			}
 		}
 

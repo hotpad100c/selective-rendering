@@ -2,7 +2,7 @@ package com.selectiverendering.region;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.selectiverendering.matchingrule.BlockMatchRule;
-import com.selectiverendering.render.EntityNbt;
+import com.selectiverendering.matchingrule.EntityNbt;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -120,6 +120,22 @@ public final class RegionOptions {
 
 	public RegionOptions withParticleTypes(List<String> value) {
 		return new RegionOptions(blocks, entities, particles, ruleSources, entityTypes, value);
+	}
+
+	/** 以 this 为目标把 other 并进来：勾选项以 this 为准，三份名单取并集（this 的在前）。 */
+	public RegionOptions mergedWith(RegionOptions other) {
+		return new RegionOptions(
+			blocks, entities, particles,
+			concat(ruleSources, other.ruleSources),
+			concat(entityTypes, other.entityTypes),
+			concat(particleTypes, other.particleTypes)
+		);
+	}
+
+	private static List<String> concat(List<String> first, List<String> second) {
+		List<String> all = new ArrayList<>(first);
+		all.addAll(second);
+		return all;
 	}
 
 	/** 实体是否在这份名单里；名单项可以是 id，也可以在 id 后面跟 {nbt} 只匹配 NBT 包含它的实体。名单为空时谁都不在名单里。 */

@@ -1,7 +1,7 @@
 package com.selectiverendering.interaction;
 
 import com.selectiverendering.SelectiveRenderingManager;
-import com.selectiverendering.render.Alpha;
+import com.selectiverendering.render.hiding.AlphaGetter;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Blocks;
@@ -19,7 +19,7 @@ public final class FadedBlockGetter implements BlockGetter {
 	}
 
 	private boolean faded(BlockState state, BlockPos pos) {
-		return SelectiveRenderingManager.isPassThroughActive() && Alpha.isFaded(state, pos);
+		return SelectiveRenderingManager.isPassThroughActive() && AlphaGetter.isFaded(state, pos);
 	}
 
 	@Override

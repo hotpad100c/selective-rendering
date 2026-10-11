@@ -3,7 +3,7 @@ package com.selectiverendering.recording;
 import com.selectiverendering.SelectiveRendering;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.matchingrule.BlockListMessage;
-import com.selectiverendering.region.Region;
+import com.selectiverendering.region.Area;
 import com.selectiverendering.region.RegionEditor;
 import com.selectiverendering.region.RegionMerger;
 import com.selectiverendering.util.Log;
@@ -88,7 +88,7 @@ public final class BlockChangeRecorder {
 
 		changed.clear();
 
-		List<Region> boxes = RegionMerger.merge(positions);
+		List<Area> boxes = RegionMerger.merge(positions);
 		Log.debug("[recorder] Recording stopped: {} position(s) -> {} region(s)", positions.size(), boxes.size());
 
 		if (boxes.isEmpty()) {
@@ -98,8 +98,8 @@ public final class BlockChangeRecorder {
 
 		boolean subtract = SelectiveRenderingManager.getRecordApplyMode() == SelectiveRenderingManager.RecordApplyMode.SUBTRACT;
 		boolean applied = subtract
-			? RegionEditor.subtractRegions(boxes)
-			: RegionEditor.addRegions(boxes) > 0;
+			? RegionEditor.subtractAreas(boxes)
+			: RegionEditor.addAreas(boxes) > 0;
 
 		if (!applied) {
 			say("nothing", false);
@@ -225,7 +225,7 @@ public final class BlockChangeRecorder {
 	}
 
 	private static boolean inside(BlockPos pos) {
-		Region selection = RegionEditor.selection();
+		Area selection = RegionEditor.selection();
 		return selection != null && selection.contains(pos);
 	}
 

@@ -2,7 +2,7 @@ package com.selectiverendering.blockentity;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.QuadInstance;
-import com.selectiverendering.render.Alpha;
+import com.selectiverendering.render.hiding.AlphaGetter;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.model.Model;
 //? if <26.2 {
@@ -78,7 +78,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	/** 把隐藏透明度乘进颜色的 alpha；调用方传入没有 alpha 的颜色时按不透明处理。 */
 	private static int tinted(int color) {
 		int existing = color >>> 24;
-		int alpha = (existing == 0 ? 255 : existing) * Alpha.getHiddenAlpha() / 255;
+		int alpha = (existing == 0 ? 255 : existing) * AlphaGetter.getHiddenAlpha() / 255;
 
 		return (color & 0x00FFFFFF) | (alpha << 24);
 	}
@@ -158,7 +158,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	@Override
 	public void submitCustomGeometry(@NonNull PoseStack poseStack, @NonNull RenderType renderType, SubmitNodeCollector.@NonNull CustomGeometryRenderer renderer) {
 		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.variant(renderType),
-			(pose, consumer) -> renderer.render(pose, new AlphaVertexConsumer(consumer, Alpha.getHiddenAlpha())));
+			(pose, consumer) -> renderer.render(pose, new AlphaVertexConsumer(consumer, AlphaGetter.getHiddenAlpha())));
 	}
 
 

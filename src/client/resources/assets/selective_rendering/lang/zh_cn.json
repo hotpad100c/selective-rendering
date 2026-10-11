@@ -64,7 +64,7 @@
   "selective_rendering.hint.block_id": "%s+左键：添加/移除方块",
   "selective_rendering.hint.block_state": "%s+右键：添加/移除状态方块",
   "selective_rendering.hint.mode": "左Ctrl+滚轮：切换模式",
-  "selective_rendering.hint.select_corner": "中键：选中角点",
+  "selective_rendering.hint.select_corner": "中键：选中角点或选区，对着空气取消选择",
   "selective_rendering.hint.move_corner": "左Alt+滚轮：移动选中角点",
   "selective_rendering.hint.record": "%s：记录变化",
   "selective_rendering.hint.config": "%s：打开配置",
@@ -94,5 +94,14 @@
   "selective_rendering.config.comment.region_particle_types": "这个选区的粒子名单，供「名单内 / 名单外」模式使用，例如 minecraft:flame",
   "selective_rendering.config.region_edit": "编辑",
   "selective_rendering.config.region_back": "返回",
-  "selective_rendering.config.region_title": "选区 #%s"
+  "selective_rendering.config.region_title": "选区 #%s",
+  "selective_rendering.config.region_area": "范围",
+  "selective_rendering.config.region_areas": "个范围",
+  "selective_rendering.config.region_detach": "独立",
+  "selective_rendering.config.region_detach_tip": "让这个范围成为一个新的选区，保留原来的设置",
+  "selective_rendering.config.region_detach_blocked": "选区至少要保留一个范围",
+  "selective_rendering.config.region_merge": "合并到",
+  "selective_rendering.config.region_merge_apply": "合并",
+  "selective_rendering.config.region_merge_tip": "把所有范围并入选中的选区，设置以目标选区为准，名单取并集",
+  "selective_rendering.config.region_merge_none": "没有其它选区"
 }
