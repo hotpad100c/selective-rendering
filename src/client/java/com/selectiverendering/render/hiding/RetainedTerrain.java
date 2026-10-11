@@ -114,6 +114,7 @@ public final class RetainedTerrain {
 		final int alpha;
 		final boolean global;
 		final boolean translucent;
+		final java.util.UUID region;
 		final float minX, minY, minZ, maxX, maxY, maxZ;
 		// 每个四边形的中心（相对区段原点），用来按到相机的距离排序。
 		final float[] centroids;
@@ -126,8 +127,9 @@ public final class RetainedTerrain {
 		float jobX, jobY, jobZ;
 		boolean retired;
 
-		BufferPice(GpuBuffer buffer, int indexCount, int alpha, boolean global, boolean translucent, float[] bounds, float[] centroids) {
+		BufferPice(GpuBuffer buffer, int indexCount, int alpha, boolean global, boolean translucent, java.util.UUID region, float[] bounds, float[] centroids) {
 			this.translucent = translucent;
+			this.region = region;
 			this.buffer = buffer;
 			this.indexCount = indexCount;
 			this.alpha = alpha;
@@ -142,11 +144,42 @@ public final class RetainedTerrain {
 		}
 	}
 
+	// 同一个区段里一起画的四边形：同一个选区的覆盖、或者同一个固定透明度、或者全局透明度，并且同属不透明 / 半透明层。
+	private record GroupKey(java.util.UUID region, boolean global, int alpha, boolean translucent) {
+		static GroupKey of(TerrainTranslucency.Quad quad) {
+			boolean fixed = quad.region() == null && !quad.global();
+			return new GroupKey(quad.region(), quad.region() == null && quad.global(), fixed ? quad.alpha() : 0, quad.translucent());
+		}
+	}
+
+	// 每帧刷新：各选区当前的透明度覆盖值。
+	private static final Map<java.util.UUID, Integer> OVERRIDES = new HashMap<>();
+
+	private static void refreshOverrides() {
+		OVERRIDES.clear();
+
+		for (com.selectiverendering.region.Region region : SelectiveRenderingManager.config().regions()) {
+			OVERRIDES.put(region.id(), region.options().alphaOverride());
+		}
+	}
+
+	// 一块缓冲当前应该用的透明度：选区的覆盖在绘制时取最新值，所以改透明度覆盖不用重建缓冲。
+	private static int alphaOf(BufferPice piece) {
+		int global = SelectiveRenderingManager.config().alpha();
+
+		if (piece.region != null) {
+			Integer override = OVERRIDES.get(piece.region);
+			return override != null && override >= 0 ? override : global;
+		}
+
+		return piece.global ? global : piece.alpha;
+	}
+
 	private record Section(List<TerrainTranslucency.Quad> source, List<BufferPice> pieces) {
 	}
 
 	// CPU 侧已经建好的一组顶点数据，等渲染线程上传。
-	private record PieceData(ByteBuffer vertices, int indexCount, int alpha, boolean global, boolean translucent, float[] bounds, float[] centroids) {
+	private record PieceData(ByteBuffer vertices, int indexCount, int alpha, boolean global, boolean translucent, java.util.UUID region, float[] bounds, float[] centroids) {
 	}
 
 	private record Pending(List<TerrainTranslucency.Quad> source, Future<List<PieceData>> future) {
@@ -204,6 +237,7 @@ public final class RetainedTerrain {
 	public static void prepare(ClientLevel level, CameraRenderState camera, SubmitNodeCollector collector) {
 		current = null;
 		currentStorage = collector;
+		refreshOverrides();
 
 		GRAVEYARD.forEach(GpuBuffer::close);
 		GRAVEYARD.clear();
@@ -394,7 +428,7 @@ public final class RetainedTerrain {
 			boolean marked = false;
 
 			for (BufferPice piece : built.pieces()) {
-				if (piece.indexCount <= 0 || (piece.global ? SelectiveRenderingManager.config().alpha() : piece.alpha) <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
+				if (piece.indexCount <= 0 || alphaOf(piece) <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
 					continue;
 				}
 
@@ -495,7 +529,7 @@ public final class RetainedTerrain {
 
 		for (Placed placed : subset) {
 			BufferPice piece = placed.bufferPice();
-			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
+			float alpha = alphaOf(piece) / 255.0F;
 
 			Matrix4f modelView = new Matrix4f(frame.view()).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
 			GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture);
@@ -559,7 +593,7 @@ public final class RetainedTerrain {
 		List<GpuBufferSlice> transforms = new ArrayList<>();
 		for (Placed placed : subset) {
 			BufferPice piece = placed.bufferPice();
-			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
+			float alpha = alphaOf(piece) / 255.0F;
 
 			Matrix4f modelView = new Matrix4f(view).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
 			transforms.add(RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture));
@@ -700,10 +734,10 @@ public final class RetainedTerrain {
 
 	// 区段里的四边形按透明度分组，每组一块缓冲。
 	private static Section build(List<TerrainTranslucency.Quad> quads, RenderType type) {
-		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
+		Map<GroupKey, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
 
 		for (TerrainTranslucency.Quad quad : quads) {
-			long key = (quad.global() ? -1L : quad.alpha()) * 2 + (quad.translucent() ? 1 : 0);
+			GroupKey key = GroupKey.of(quad);
 			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
 		}
 
@@ -717,10 +751,10 @@ public final class RetainedTerrain {
 
 	// 后台线程：把四边形按透明度分组并写成顶点字节，不碰任何渲染线程状态。
 	private static List<PieceData> buildData(List<TerrainTranslucency.Quad> quads, VertexFormat format) {
-		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
+		Map<GroupKey, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
 
 		for (TerrainTranslucency.Quad quad : quads) {
-			long key = (quad.global() ? -1L : quad.alpha()) * 2 + (quad.translucent() ? 1 : 0);
+			GroupKey key = GroupKey.of(quad);
 			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
 		}
 
@@ -738,7 +772,7 @@ public final class RetainedTerrain {
 					copy.flip();
 
 					TerrainTranslucency.Quad first = group.get(0);
-					result.add(new PieceData(copy, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), bounds, centroids));
+					result.add(new PieceData(copy, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), first.region(), bounds, centroids));
 				}
 			}
 		}
@@ -752,7 +786,7 @@ public final class RetainedTerrain {
 
 		for (PieceData piece : data) {
 			GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, piece.vertices());
-			pieces.add(new BufferPice(buffer, piece.indexCount(), piece.alpha(), piece.global(), piece.translucent(), piece.bounds(), piece.centroids()));
+			pieces.add(new BufferPice(buffer, piece.indexCount(), piece.alpha(), piece.global(), piece.translucent(), piece.region(), piece.bounds(), piece.centroids()));
 		}
 
 		return new Section(quads, pieces);
@@ -791,7 +825,7 @@ public final class RetainedTerrain {
 			try (MeshData mesh = builder.buildOrThrow()) {
 				GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, mesh.vertexBuffer());
 				TerrainTranslucency.Quad first = quads.get(0);
-				return new BufferPice(buffer, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), bounds, centroids);
+				return new BufferPice(buffer, mesh.drawState().indexCount(), first.alpha(), first.global(), first.translucent(), first.region(), bounds, centroids);
 			}
 		}
 	}

@@ -26,8 +26,8 @@ public final class VanillaCapture {
 	private VanillaCapture() {
 	}
 
-	public static void block(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha) {
-		TerrainTranslucency.add(toQuad(x, y, z, quad, instance, alpha, true));
+	public static void block(BlockPos pos, float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha) {
+		TerrainTranslucency.addCaptured(pos, toQuad(x, y, z, quad, instance, alpha, true));
 	}
 
 	/** capture 为真时用于半透明截流（边界面向内收、透明度跟随全局），否则原样转换（投影烘焙）。 */
@@ -74,14 +74,14 @@ public final class VanillaCapture {
 			lights[i] = instance.getLightCoordsWithEmission(i, emission);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
 	}
 
 	/** 半透明流体截流用的一个顶点；凑够四个就成为一个四边形。 */
-	public static void fluidVertex(float x, float y, float z, int color, float u, float v, int light, int alpha) {
+	public static void fluidVertex(BlockPos pos, float x, float y, float z, int color, float u, float v, int light, int alpha) {
 		TerrainTranslucency.Quad quad = push(TRANSLUCENT_FLUID.get(), x, y, z, color, u, v, light, alpha, true, true);
 		if (quad != null) {
-			TerrainTranslucency.add(quad);
+			TerrainTranslucency.addCaptured(pos, quad);
 		}
 	}
 
@@ -143,6 +143,6 @@ public final class VanillaCapture {
 			lights[i] = Float.floatToRawIntBits(data[i * STRIDE + 6]);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
 	}
 }

@@ -211,7 +211,7 @@ public class DefaultFluidRendererMixin {
 			return;
 		}
 
-		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, alpha, true, true, false));
+		TerrainTranslucency.addCaptured(world != null ? world : pos, this.selectiveRendering$buildQuad(quad, alpha, true, true, false));
 		TerrainTranslucency.addSprite(quad.getSprite());
 		ci.cancel();
 	}
@@ -243,7 +243,7 @@ public class DefaultFluidRendererMixin {
 		}
 
 		int packedNormal = quad.getFaceNormal();
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

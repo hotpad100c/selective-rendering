@@ -35,6 +35,7 @@
 		"lighting.LightmapRenderStateExtractorMixin",
 		"lighting.SkyLightEngineMixin",
 		"hiding.particle.ParticleEngineMixin",
+		"hiding.particle.QuadParticleGroupMixin",
 		"hiding.particle.ParticleMixin",
 		"hiding.particle.ParticlePosAccessor",
 		"hiding.particle.SingleQuadParticleMixin",

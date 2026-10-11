@@ -242,7 +242,7 @@ public final class ProjectionLight {
 
 			result.add(new TerrainTranslucency.Quad(
 				positions, quad.uvs(), quad.colors(), lights,
-				quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global(), quad.translucent()
+				quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global(), quad.translucent(), quad.region()
 			));
 		}
 

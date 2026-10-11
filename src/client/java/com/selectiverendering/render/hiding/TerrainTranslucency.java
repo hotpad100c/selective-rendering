@@ -13,7 +13,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class TerrainTranslucency {
 	// alpha 是截流时的透明度，global 表示它等于当时的全局透明度（之后跟随配置变化，不用重建）。
-	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global, boolean translucent) {
+	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global, boolean translucent, java.util.UUID region) {
+			public Quad withRegion(java.util.UUID region) {
+			return new Quad(positions, uvs, colors, lights, normalX, normalY, normalZ, alpha, false, translucent, region);
+		}
 	}
 
 	/** 投影用的四边形按（范围, 区段）存放：坐标仍然是区段内坐标，投影后的位置就是区段原点加位移。 */
@@ -186,6 +189,12 @@ public final class TerrainTranslucency {
 	static Set<TextureAtlasSprite> sprites(long section) {
 		Set<TextureAtlasSprite> sprites = SPRITES.get(section);
 		return sprites == null ? Set.of() : sprites;
+	}
+
+	/** 半透明截流：如果这个方块的透明度是某个选区的覆盖决定的，记下是哪个选区。 */
+	public static void addCaptured(BlockPos pos, Quad quad) {
+		java.util.UUID region = com.selectiverendering.region.RegionTargets.blockOverrideRegion(pos);
+		add(region == null ? quad : quad.withRegion(region));
 	}
 
 	public static void add(Quad quad) {

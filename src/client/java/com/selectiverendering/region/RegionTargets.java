@@ -120,6 +120,23 @@ public final class RegionTargets {
 		return result;
 	}
 
+	/** 决定这个方块透明度的选区（设置了透明度覆盖、包含这个方块的第一个选区）的 id；没有就返回 null，表示用全局透明度。 */
+	public static java.util.UUID blockOverrideRegion(BlockPos pos) {
+		RenderConfig current = SelectiveRenderingManager.config();
+
+		if (!current.hasAlphaOverride()) {
+			return null;
+		}
+
+		for (Region region : current.blockRegions()) {
+			if (region.options().alphaOverride() >= 0 && region.contains(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5)) {
+				return region.id();
+			}
+		}
+
+		return null;
+	}
+
 	/** 返回实体应使用的透明度，-1 表示正常渲染 */
 	public static int entityAlpha(EntityType<?> type, int entityId, double x, double y, double z) {
 		RenderConfig current = SelectiveRenderingManager.config();

@@ -135,7 +135,7 @@ public class BlockRendererMixin {
 	@Unique
 	private void selectiveRendering$capture(MutableQuadViewImpl quad, float[] brightnesses, int alpha) {
 		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
-		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true, false));
+		TerrainTranslucency.addCaptured(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true, false));
 	}
 
 	/** 把 Sodium 的一个四边形转成区段内坐标的四边形；capture 为真时边界面向内收，透明度跟随全局。 */
@@ -169,7 +169,7 @@ public class BlockRendererMixin {
 			lights[i] = quad.getLight(source);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
 	}
 
 	@Unique

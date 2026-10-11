@@ -156,7 +156,7 @@ public class FluidRendererMixin {
 		}
 
 		if (alpha >= 0 && alpha < 255 && TerrainTranslucency.capturing() && (alpha > 0 || SelectiveRenderingManager.isBuildHiddenMesh())) {
-			VanillaCapture.fluidVertex(x, y, z, color, u, v, light, alpha);
+			VanillaCapture.fluidVertex(fluidPos, x, y, z, color, u, v, light, alpha);
 			ci.cancel();
 		}
 	}

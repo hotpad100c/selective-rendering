@@ -189,7 +189,7 @@ public class ModelBlockRendererMixin {
 		}
 
 		if (TerrainTranslucency.capturing()) {
-			VanillaCapture.block(x, y, z, quad, instance, alpha);
+			VanillaCapture.block(blockPos, x, y, z, quad, instance, alpha);
 			return;
 		}
 

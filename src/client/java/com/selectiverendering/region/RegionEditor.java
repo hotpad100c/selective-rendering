@@ -202,7 +202,8 @@ public final class RegionEditor {
 
 		boolean blocksChanged = !old.areas().equals(updated.areas())
 			|| old.options().blocks() != updated.options().blocks()
-			|| !old.options().ruleSources().equals(updated.options().ruleSources());
+			|| !old.options().ruleSources().equals(updated.options().ruleSources())
+			|| alphaCategory(old.options().alphaOverride()) != alphaCategory(updated.options().alphaOverride());
 
 		if (blocksChanged) {
 			List<Area> touched = new ArrayList<>(old.areas());
@@ -211,6 +212,20 @@ public final class RegionEditor {
 		}
 
 		return true;
+	}
+
+	private static int alphaCategory(int override) {
+		int alpha = override < 0 ? SelectiveRenderingManager.config().alpha() : override;
+
+		if (alpha >= 255) {
+			return 2;
+		}
+
+		if (alpha <= 0 && !SelectiveRenderingManager.isBuildHiddenMesh()) {
+			return 0;
+		}
+
+		return 1;
 	}
 
 	/** 把选区的投影位移改变 (dx, dy, dz)，返回改变后的位移（x, y, z）；选区已不存在时返回 null。 */
