@@ -28,8 +28,10 @@ public final class ProjectionLight {
 		private final int sizeZ;
 		private final byte[] sky;
 		private final byte[] block;
+		private final boolean[] solid;
 
-		private Field(int version, int sizeX, int sizeY, int sizeZ, byte[] sky, byte[] block) {
+		private Field(int version, int sizeX, int sizeY, int sizeZ, byte[] sky, byte[] block, boolean[] solid) {
+			this.solid = solid;
 			this.version = version;
 			this.sizeX = sizeX;
 			this.sizeY = sizeY;
@@ -44,6 +46,12 @@ public final class ProjectionLight {
 			}
 
 			return x + sizeX * (y + sizeY * z);
+		}
+
+		/** 这一格完全挡光：平滑光照取平均时不计入。 */
+		public boolean solid(int x, int y, int z) {
+			int index = index(x + 1, y + 1, z + 1);
+			return index >= 0 && solid[index];
 		}
 
 		/** 范围内（含外壳）一格的光照，原版光照坐标的打包格式。 */
@@ -174,7 +182,12 @@ public final class ProjectionLight {
 
 		spread(sky, skyQueue, opacity, skyDown, true, sizeX, sizeY, sizeZ);
 		spread(block, blockQueue, opacity, skyDown, false, sizeX, sizeY, sizeZ);
-		return new Field(version, sizeX, sizeY, sizeZ, sky, block);
+		boolean[] solid = new boolean[count];
+		for (int index = 0; index < count; index++) {
+			solid[index] = opacity[index] >= 15;
+		}
+
+		return new Field(version, sizeX, sizeY, sizeZ, sky, block, solid);
 	}
 
 	private static void spread(byte[] light, IntArrayFIFOQueue queue, byte[] opacity, boolean[] skyDown, boolean skyLight, int sizeX, int sizeY, int sizeZ) {
@@ -207,7 +220,7 @@ public final class ProjectionLight {
 		}
 	}
 
-	/** 按投影自己的光照重算一个区段里投影四边形的光照：取面朝向那一格和方块自己那一格里更亮的。 */
+	/** 按投影自己的光照重算一个区段里投影四边形的光照，每个顶点平滑：取顶点周围朝着面外的那几格里不挡光的格子的平均。 */
 	public static List<TerrainTranslucency.Quad> relight(List<TerrainTranslucency.Quad> quads, int sectionMinX, int sectionMinY, int sectionMinZ, Area area, Field field) {
 		float shiftX = sectionMinX - area.min().getX();
 		float shiftY = sectionMinY - area.min().getY();
@@ -217,31 +230,70 @@ public final class ProjectionLight {
 
 		for (TerrainTranslucency.Quad quad : quads) {
 			float[] positions = quad.positions();
-			float centerX = (positions[0] + positions[3] + positions[6] + positions[9]) * 0.25F + shiftX;
-			float centerY = (positions[1] + positions[4] + positions[7] + positions[10]) * 0.25F + shiftY;
-			float centerZ = (positions[2] + positions[5] + positions[8] + positions[11]) * 0.25F + shiftZ;
+			int[] lights = new int[4];
 
-			int front = field.light(
-				(int) Math.floor(centerX + quad.normalX() * 0.5F),
-				(int) Math.floor(centerY + quad.normalY() * 0.5F),
-				(int) Math.floor(centerZ + quad.normalZ() * 0.5F)
-			);
-			int own = field.light(
-				(int) Math.floor(centerX - quad.normalX() * 0.01F),
-				(int) Math.floor(centerY - quad.normalY() * 0.01F),
-				(int) Math.floor(centerZ - quad.normalZ() * 0.01F)
-			);
-
-			int block = Math.max((front >> 4) & 15, (own >> 4) & 15);
-			int sky = Math.max((front >> 20) & 15, (own >> 20) & 15);
-			int packed = pack(block, sky);
+			for (int vertex = 0; vertex < 4; vertex++) {
+				lights[vertex] = vertexLight(
+					field,
+					positions[vertex * 3] + shiftX, positions[vertex * 3 + 1] + shiftY, positions[vertex * 3 + 2] + shiftZ,
+					quad.normalX(), quad.normalY(), quad.normalZ()
+				);
+			}
 
 			result.add(new TerrainTranslucency.Quad(
-				positions, quad.uvs(), quad.colors(), new int[]{packed, packed, packed, packed},
+				positions, quad.uvs(), quad.colors(), lights,
 				quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global(), quad.translucent()
 			));
 		}
 
 		return result;
+	}
+
+	private static int vertexLight(Field field, float x, float y, float z, float nx, float ny, float nz) {
+		int baseX = (int) Math.floor(x - 0.5F);
+		int baseY = (int) Math.floor(y - 0.5F);
+		int baseZ = (int) Math.floor(z - 0.5F);
+
+		int[] front = sample(field, baseX, baseY, baseZ, x, y, z, nx, ny, nz, true);
+		if (front[2] == 0) {
+			front = sample(field, baseX, baseY, baseZ, x, y, z, nx, ny, nz, false);
+		}
+
+		if (front[2] == 0) {
+			return pack(0, 15);
+		}
+
+		return pack(Math.round(front[0] / (float) front[2]), Math.round(front[1] / (float) front[2]));
+	}
+
+	private static int[] sample(Field field, int baseX, int baseY, int baseZ, float x, float y, float z, float nx, float ny, float nz, boolean frontOnly) {
+		int blockSum = 0;
+		int skySum = 0;
+		int count = 0;
+
+		for (int dx = 0; dx <= 1; dx++) {
+			for (int dy = 0; dy <= 1; dy++) {
+				for (int dz = 0; dz <= 1; dz++) {
+					int cx = baseX + dx;
+					int cy = baseY + dy;
+					int cz = baseZ + dz;
+
+					if (frontOnly && (cx + 0.5F - x) * nx + (cy + 0.5F - y) * ny + (cz + 0.5F - z) * nz <= 1.0E-4F) {
+						continue;
+					}
+
+					if (field.solid(cx, cy, cz)) {
+						continue;
+					}
+
+					int light = field.light(cx, cy, cz);
+					blockSum += (light >> 4) & 15;
+					skySum += (light >> 20) & 15;
+					count++;
+				}
+			}
+		}
+
+		return new int[]{blockSum, skySum, count};
 	}
 }

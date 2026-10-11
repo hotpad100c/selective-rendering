@@ -51,7 +51,7 @@ public class FluidRendererMixin {
 		TRANSLUCENT_LAYER.set(Minecraft.getInstance().getModelManager().getFluidStateModelSet().get(fluidState).layer() == ChunkSectionLayer.TRANSLUCENT);
 		LEVEL.set(level);
 
-		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
+		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh()) && !TerrainTranslucency.projecting(pos)) {
 			ci.cancel();
         }
 	}
@@ -70,6 +70,12 @@ public class FluidRendererMixin {
 		Operation<Boolean> original
 	) {
 		if (!original.call(direction, height, neighborState)) {
+			return false;
+		}
+
+		// 投影范围边界上朝着范围外的面：投影需要它，不能被外面的方块遮掉。
+		BlockPos boundaryPos = POS.get();
+		if (boundaryPos != null && TerrainTranslucency.projectionBoundary(boundaryPos, BlockPosScratch.offset(boundaryPos, direction))) {
 			return false;
 		}
 
@@ -101,6 +107,11 @@ public class FluidRendererMixin {
 		Operation<Boolean> original
 	) {
 		if (original.call(fluidState, blockState, direction, neighborFluidState)) {
+			return true;
+		}
+
+		BlockPos boundaryPos = POS.get();
+		if (boundaryPos != null && TerrainTranslucency.projectionBoundary(boundaryPos, BlockPosScratch.offset(boundaryPos, direction))) {
 			return true;
 		}
 
@@ -138,6 +149,12 @@ public class FluidRendererMixin {
 		}
 
 		int alpha = ALPHA.get();
+		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
+			// 被隐藏的流体只给投影用，不进真实网格。
+			ci.cancel();
+			return;
+		}
+
 		if (alpha >= 0 && alpha < 255 && TerrainTranslucency.capturing() && (alpha > 0 || SelectiveRenderingManager.isBuildHiddenMesh())) {
 			VanillaCapture.fluidVertex(x, y, z, color, u, v, light, alpha);
 			ci.cancel();

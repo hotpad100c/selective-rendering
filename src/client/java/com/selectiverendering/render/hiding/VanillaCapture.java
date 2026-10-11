@@ -32,6 +32,10 @@ public final class VanillaCapture {
 
 	/** capture 为真时用于半透明截流（边界面向内收、透明度跟随全局），否则原样转换（投影烘焙）。 */
 	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture) {
+		return toQuad(x, y, z, quad, instance, alpha, capture, false);
+	}
+
+	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture, boolean flatShade) {
 		boolean translucent = capture || quad.materialInfo().layer() == ChunkSectionLayer.TRANSLUCENT;
 		float inset = capture ? CAPTURE_INSET : 0.0F;
 		float[] positions = new float[12];
@@ -55,7 +59,18 @@ public final class VanillaCapture {
 			uvs[i * 2] = UVPair.unpackU(uv);
 			uvs[i * 2 + 1] = UVPair.unpackV(uv);
 
-			colors[i] = instance.getColor(i) | 0xFF000000;
+			int color = instance.getColor(i);
+
+			if (flatShade) {
+				int red = (color >> 16) & 0xFF;
+				int green = (color >> 8) & 0xFF;
+				int blue = color & 0xFF;
+				int max = Math.max(1, Math.max(red, Math.max(green, blue)));
+				float shade = TerrainTranslucency.directionalShade(direction) * 255.0F / max;
+				color = ((int) Math.min(255.0F, red * shade) << 16) | ((int) Math.min(255.0F, green * shade) << 8) | (int) Math.min(255.0F, blue * shade);
+			}
+
+			colors[i] = color | 0xFF000000;
 			lights[i] = instance.getLightCoordsWithEmission(i, emission);
 		}
 

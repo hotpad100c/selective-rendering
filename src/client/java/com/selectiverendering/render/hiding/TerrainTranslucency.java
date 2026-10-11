@@ -103,6 +103,35 @@ public final class TerrainTranslucency {
 		return false;
 	}
 
+	public static net.minecraft.core.Direction directionOf(float x, float y, float z) {
+		float ax = Math.abs(x);
+		float ay = Math.abs(y);
+		float az = Math.abs(z);
+
+		if (ay >= ax && ay >= az) {
+			return y >= 0 ? net.minecraft.core.Direction.UP : net.minecraft.core.Direction.DOWN;
+		}
+
+		if (ax >= az) {
+			return x >= 0 ? net.minecraft.core.Direction.EAST : net.minecraft.core.Direction.WEST;
+		}
+
+		return z >= 0 ? net.minecraft.core.Direction.SOUTH : net.minecraft.core.Direction.NORTH;
+	}
+
+	public static float directionalShade(net.minecraft.core.Direction direction) {
+		if (direction == null) {
+			return 1.0F;
+		}
+
+		return switch (direction) {
+			case DOWN -> 0.5F;
+			case UP -> 1.0F;
+			case NORTH, SOUTH -> 0.8F;
+			case WEST, EAST -> 0.6F;
+		};
+	}
+
 	/** 方块在某个投影的源范围里，而邻居不在：这个面朝着范围外，投影时需要它，不能因为外面有方块就被剔除。 */
 	public static boolean projectionBoundary(BlockPos pos, BlockPos neighbour) {
 		Builder builder = BUILDER.get();

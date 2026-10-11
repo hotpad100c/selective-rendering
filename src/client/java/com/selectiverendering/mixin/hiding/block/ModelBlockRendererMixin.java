@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.selectiverendering.render.hiding.VanillaCapture;
 import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -62,6 +63,7 @@ public class ModelBlockRendererMixin {
 	) {
 		selectiveRendering$blockAlpha.set(MovingBlockRenderContext.alpha() != -1 ? -1 : AlphaGetter.getAlpha(blockState, pos));
 		selectiveRendering$blockPos.set(pos.immutable());
+		selectiveRendering$forcedFaces.get()[0] = 0;
 	}
 
 	@Inject(method = "tesselateBlock", at = @At("TAIL"), require = 1)
@@ -86,9 +88,25 @@ public class ModelBlockRendererMixin {
 			return;
 		}
 
-		if (selectiveRendering$blockAlpha.get() == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
+		if (selectiveRendering$blockAlpha.get() == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh()) && !TerrainTranslucency.projecting(pos)) {
 			ci.cancel();
 		}
+	}
+
+	/** 当前线程正在渲染的方块里，因为投影而被强制保留的面（按 Direction.ordinal 的位掩码）。 */
+	@Unique
+	private static final ThreadLocal<int[]> selectiveRendering$forcedFaces = ThreadLocal.withInitial(() -> new int[1]);
+
+	/** 投影范围边界上朝着范围外的面：原本会被外面的方块剔除，投影需要它，保留，并记下这个面只给投影用。 */
+	@ModifyReturnValue(method = "shouldRenderFace", at = @At("RETURN"), require = 1)
+	private boolean selectiveRendering$keepProjectedFace(boolean original, BlockAndTintGetter level, BlockState state, Direction direction, BlockPos neighbourPos) {
+		BlockPos origin = selectiveRendering$blockPos.get();
+		if (original || origin == null || MovingBlockRenderContext.alpha() != -1 || !TerrainTranslucency.projectionBoundary(origin, neighbourPos)) {
+			return original;
+		}
+
+		selectiveRendering$forcedFaces.get()[0] |= 1 << direction.ordinal();
+		return true;
 	}
 
 	/** 相邻方块的淡化状态不同时保留该面。 */
@@ -105,12 +123,6 @@ public class ModelBlockRendererMixin {
 		}
 
 		if (MovingBlockRenderContext.alpha() != -1) {
-			return;
-		}
-
-		BlockPos origin = selectiveRendering$blockPos.get();
-		if (origin != null && TerrainTranslucency.projectionBoundary(origin, neighbourPos)) {
-			cir.setReturnValue(true);
 			return;
 		}
 
@@ -153,12 +165,25 @@ public class ModelBlockRendererMixin {
 
 		BlockPos blockPos = selectiveRendering$blockPos.get();
 		if (blockPos != null && TerrainTranslucency.projecting(blockPos)) {
-			TerrainTranslucency.addProjected(blockPos, VanillaCapture.toQuad(x, y, z, quad, instance, 255, false));
+			// 因投影才保留的面：不用外面的方块算出来的黑色 AO，也不能进真实的网格。
+			boolean forced = (selectiveRendering$forcedFaces.get()[0] & (1 << quad.direction().ordinal())) != 0;
+			boolean boundary = TerrainTranslucency.projectionBoundary(blockPos, blockPos.relative(quad.direction()));
+
+			TerrainTranslucency.addProjected(blockPos, VanillaCapture.toQuad(x, y, z, quad, instance, 255, false, boundary));
 			TerrainTranslucency.addSprite(quad.materialInfo().sprite());
+
+			if (forced) {
+				return;
+			}
 		}
 
 		int alpha = selectiveRendering$blockAlpha.get();
-		if (alpha < 0 || alpha >= 255 || (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh()))) {
+		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
+			// 被隐藏的方块只给投影用，不进真实网格。
+			return;
+		}
+
+		if (alpha < 0 || alpha >= 255) {
 			original.call(output, x, y, z, quad, instance);
 			return;
 		}

@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.AlphaGetter;
@@ -35,6 +36,30 @@ public class AbstractBlockRenderContextMixin implements BlockRenderContextAccess
 	@Nullable
 	private Integer selectiveRendering$alpha;
 
+	@Unique
+	private int selectiveRendering$forcedFaces;
+
+	@Override
+	public int selectiveRendering$forcedFaces() {
+		return this.selectiveRendering$forcedFaces;
+	}
+
+	@Override
+	public void selectiveRendering$setForcedFaces(int mask) {
+		this.selectiveRendering$forcedFaces = mask;
+	}
+
+	/** 投影范围边界上朝着范围外的面：原本会被外面的方块剔除，但投影需要它，所以保留只给投影用 */
+	@ModifyReturnValue(method = "shouldDrawSide", at = @At("RETURN"))
+	private boolean selectiveRendering$keepProjectedFace(boolean original, Direction direction) {
+		if (original || pos == null || !TerrainTranslucency.projectionBoundary(pos, BlockPosScratch.offset(pos, direction))) {
+			return original;
+		}
+
+		this.selectiveRendering$forcedFaces |= 1 << direction.ordinal();
+		return true;
+	}
+
 	@Override
 	@Nullable
 	public Integer selectiveRendering$alpha() {
@@ -57,11 +82,6 @@ public class AbstractBlockRenderContextMixin implements BlockRenderContextAccess
 		}
 
 		if (level == null || state == null || pos == null) {
-			return;
-		}
-
-		if (TerrainTranslucency.projectionBoundary(pos, BlockPosScratch.offset(pos, direction))) {
-			cir.setReturnValue(true);
 			return;
 		}
 

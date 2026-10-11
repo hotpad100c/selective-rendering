@@ -8,4 +8,9 @@ public interface BlockRenderContextAccess {
 	Integer selectiveRendering$alpha();
 
 	void selectiveRendering$setAlpha(@Nullable Integer alpha);
+
+	/** 这个方块里因为投影而被强制保留的面（按 Direction.ordinal 的位掩码），这些面只给投影用 */
+	int selectiveRendering$forcedFaces();
+
+	void selectiveRendering$setForcedFaces(int mask);
 }

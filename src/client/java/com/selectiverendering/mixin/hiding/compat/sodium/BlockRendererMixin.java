@@ -1,5 +1,7 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import com.selectiverendering.util.BlockPosScratch;
+import net.minecraft.core.Direction;
 import com.selectiverendering.SelectiveRenderingManager;
 import net.caffeinemc.mods.sodium.client.render.texture.SpriteFinderCache;
 import org.spongepowered.asm.mixin.Shadow;
@@ -51,10 +53,12 @@ public class BlockRendererMixin {
 		int alpha = AlphaGetter.getAlpha(state, pos);
 
 		context.selectiveRendering$setAlpha(alpha);
+		context.selectiveRendering$setForcedFaces(0);
 		this.selectiveRendering$pos = pos;
 
 		try {
-			if (alpha != 0 || (TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
+			// 被隐藏的方块如果在投影的源范围里，也要走一遍，好把它的四边形复制给投影（真实网格里仍然不出现）。
+			if (alpha != 0 || (TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh()) || TerrainTranslucency.projecting(pos)) {
 				original.call(model, state, pos, origin);
 			}
 		} finally {
@@ -76,8 +80,20 @@ public class BlockRendererMixin {
 	@Inject(method = "bufferQuad", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onBufferQuad(MutableQuadViewImpl quad, float[] brightnesses, Material material, CallbackInfo ci) {
 		if (this.selectiveRendering$pos != null && TerrainTranslucency.projecting(this.selectiveRendering$pos)) {
-			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false, material.pass.isTranslucent()));
+			// 朝着范围外的面（贴着范围外的方块）：Sodium 按外面的方块算出来的 AO 是黑的，
+			// 这种面只用方向性阴影，不要 AO（不论它是因为投影、还是因为选区隐藏才被保留下来的）。
+			// 只因为投影才保留的面还不能进真实的网格。
+			Direction face = quad.getCullFace();
+			boolean boundary = face != null && TerrainTranslucency.projectionBoundary(this.selectiveRendering$pos, BlockPosScratch.offset(this.selectiveRendering$pos, face));
+			boolean forced = face != null && (this.selectiveRendering$context().selectiveRendering$forcedFaces() & (1 << face.ordinal())) != 0;
+
+			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false, material.pass.isTranslucent(), boundary));
 			TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
+
+			if (forced) {
+				ci.cancel();
+				return;
+			}
 		}
 
 		int alpha = this.selectiveRendering$alpha();
@@ -92,6 +108,7 @@ public class BlockRendererMixin {
 		}
 
 		if (alpha == 0) {
+			ci.cancel();
 			return;
 		}
 
@@ -118,12 +135,12 @@ public class BlockRendererMixin {
 	@Unique
 	private void selectiveRendering$capture(MutableQuadViewImpl quad, float[] brightnesses, int alpha) {
 		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
-		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true));
+		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true, false));
 	}
 
 	/** 把 Sodium 的一个四边形转成区段内坐标的四边形；capture 为真时边界面向内收，透明度跟随全局。 */
 	@Unique
-	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture, boolean translucent) {
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture, boolean translucent, boolean flatShade) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -143,7 +160,7 @@ public class BlockRendererMixin {
 			uvs[i * 2 + 1] = quad.getTexV(source);
 
 			int color = quad.baseColor(source);
-			float shade = Math.min(1.0F, brightnesses[source]);
+			float shade = flatShade ? TerrainTranslucency.directionalShade(quad.getCullFace()) : Math.min(1.0F, brightnesses[source]);
 			int red = (int) (((color >> 16) & 0xFF) * shade);
 			int green = (int) (((color >> 8) & 0xFF) * shade);
 			int blue = (int) ((color & 0xFF) * shade);
