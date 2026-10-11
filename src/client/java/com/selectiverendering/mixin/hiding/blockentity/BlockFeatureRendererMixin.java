@@ -22,13 +22,15 @@ import org.spongepowered.asm.mixin.injection.At;
 /** 为活塞移动方块设置渲染透明度和半透明 RenderType。 */
 @Mixin(MovingBlockFeatureRenderer.class)
 public class BlockFeatureRendererMixin {
-	@Unique
-	private static final String selectiveRendering$TESSELATE_BLOCK = "Lnet/minecraft/client/renderer/block/ModelBlockRenderer;tesselateBlock(Lnet/minecraft/client/renderer/block/BlockQuadOutput;FFFLnet/minecraft/client/renderer/block/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/client/renderer/block/dispatch/BlockStateModel;J)V";
 
-	@Unique
-	private static final String selectiveRendering$GET_VERTEX_BUILDER = "Lnet/minecraft/client/renderer/feature/RenderTypeFeatureRenderer;getVertexBuilder(Lnet/minecraft/client/renderer/rendertype/RenderType;)Lcom/mojang/blaze3d/vertex/VertexConsumer;";
-
-	@WrapOperation(method = "buildGroup", at = @At(value = "INVOKE", target = selectiveRendering$TESSELATE_BLOCK), require = 0)
+	@WrapOperation(method = "buildGroup", at = @At(value = "INVOKE", target =
+			"Lnet/minecraft/client/renderer/block/ModelBlockRenderer;" +
+					"tesselateBlock(Lnet/minecraft/client/renderer/block/" +
+					"BlockQuadOutput;FFFLnet/minecraft/client/renderer/block" +
+					"/BlockAndTintGetter;Lnet/minecraft/core/BlockPos;Lnet" +
+					"/minecraft/world/level/block/state/BlockState;" +
+					"Lnet/minecraft/client/renderer/block/dispatch" +
+					"/BlockStateModel;J)V"), require = 0)
 	private void selectiveRendering$aroundTesselateBlock(
 		ModelBlockRenderer blockRenderer,
 		BlockQuadOutput output,
@@ -51,18 +53,27 @@ public class BlockFeatureRendererMixin {
 		}
 	}
 
-	@WrapOperation(method = "putBakedQuad", at = @At(value = "INVOKE", target = selectiveRendering$GET_VERTEX_BUILDER), require = 0)
+	/*@WrapOperation(method = "putBakedQuad", at = @At(value = "INVOKE", target =
+			"Lnet/minecraft/client/renderer/feature/RenderTypeFeatureRenderer;" +
+					"getVertexBuilder(Lnet/minecraft/client/renderer/rendertype" +
+					"/RenderType;)Lcom/mojang/blaze3d/vertex/VertexConsumer;")
+			, require = 0)
 	private VertexConsumer selectiveRendering$translucentBuffer(RenderType renderType, Operation<VertexConsumer> original) {
+			*/
+	@WrapOperation(method = "putBakedQuad", at = @At(value = "INVOKE", target =
+			"Lnet/minecraft/client/renderer/feature/MovingBlockFeatureRenderer;getVertexBuilder(Lnet/minecraft/client/renderer/rendertype/RenderType;)Lcom/mojang/blaze3d/vertex/VertexConsumer;")
+			, require = 0)
+	private VertexConsumer selectiveRendering$translucentBuffer(MovingBlockFeatureRenderer instance, RenderType renderType, Operation<VertexConsumer> original) {
 		int alpha = MovingBlockRenderContext.alpha();
 		if (alpha <= 0 || alpha >= 255) {
-			return original.call(renderType);
+			return original.call(instance, renderType);
 		}
 
-		return original.call(RenderTypes.translucentMovingBlock());
+		return original.call(instance, RenderTypes.translucentMovingBlock());
 	}
 }
 //?} else {
-/*import com.selectiverendering.render.Alpha;
+/*import com.selectiverendering.render.hiding.AlphaGetter;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -129,7 +140,7 @@ public class BlockFeatureRendererMixin {
 		Operation<Void> original,
 		@Local MovingBlockRenderState renderState
 	) {
-		MovingBlockRenderContext.set(Alpha.getAlpha(renderState.blockState, renderState.blockPos, true));
+		MovingBlockRenderContext.set(AlphaGetter.getAlpha(renderState.blockState, renderState.blockPos, true));
 
 		try {
 			original.call(blockRenderer, output, x, y, z, level, pos, state, model, seed);
@@ -157,7 +168,7 @@ public class BlockFeatureRendererMixin {
 			return hasTranslucentMaterial;
 		}
 
-		int alpha = Alpha.getAlpha(renderState.blockState, renderState.blockPos, true);
+		int alpha = AlphaGetter.getAlpha(renderState.blockState, renderState.blockPos, true);
 		return alpha > 0 && alpha < 255;
 	}
 

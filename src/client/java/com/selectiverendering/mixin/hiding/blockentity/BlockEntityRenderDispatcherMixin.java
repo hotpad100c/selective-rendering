@@ -37,7 +37,7 @@ public class BlockEntityRenderDispatcherMixin {
 		}
 
 		if (alpha > 0) {
-			collector = new SelectiveSubmitNodeCollector(collector);
+			collector = new SelectiveSubmitNodeCollector(collector, alpha);
 		}
 
 		original.call(renderer, renderState, poseStack, collector, cameraRenderState);

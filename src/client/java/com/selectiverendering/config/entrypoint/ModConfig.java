@@ -108,6 +108,8 @@ public final class ModConfig {
 		public List<String> rules = new ArrayList<>();
 		public List<String> entityTypes = new ArrayList<>();
 		public List<String> particleTypes = new ArrayList<>();
+		/** -1 跟随全局，0..255 为这个选区自己的 alpha */
+		public int alphaOverride = -1;
 	}
 
 	public static ModConfig get() {

@@ -111,7 +111,7 @@ public final class RegionTargets {
 			}
 		}
 
-		int result = hidden(current, inside, listed) ? current.alpha() : -1;
+		int result = hidden(current, inside, listed) ? overriddenAlpha(current, regions, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) : -1;
 
 		if (cacheable) {
 			remember(cache.alpha, state, result);
@@ -124,14 +124,33 @@ public final class RegionTargets {
 	public static int entityAlpha(EntityType<?> type, int entityId, double x, double y, double z) {
 		RenderConfig current = SelectiveRenderingManager.config();
 
-		return affected(current, current.entityRegions(), region -> region.options().listsEntity(type, entityId), x, y, z) ? current.alpha() : -1;
+		List<Region> regions = current.entityRegions();
+
+		return affected(current, regions, region -> region.options().listsEntity(type, entityId), x, y, z) ? overriddenAlpha(current, regions, x, y, z) : -1;
 	}
 
 	/** 返回粒子应使用的透明度，-1 表示正常渲染 */
 	public static int particleAlpha(ParticleType<?> type, double x, double y, double z) {
 		RenderConfig current = SelectiveRenderingManager.config();
 
-		return affected(current, current.particleRegions(), region -> region.options().listsParticle(type), x, y, z) ? current.alpha() : -1;
+		List<Region> regions = current.particleRegions();
+
+		return affected(current, regions, region -> region.options().listsParticle(type), x, y, z) ? overriddenAlpha(current, regions, x, y, z) : -1;
+	}
+
+	/** 位置所在的选区设置了透明度覆盖时用它，否则用全局透明度。 */
+	private static int overriddenAlpha(RenderConfig current, List<Region> regions, double x, double y, double z) {
+		if (current.hasAlphaOverride()) {
+			for (Region region : regions) {
+				int override = region.options().alphaOverride();
+
+				if (override >= 0 && region.contains(x, y, z)) {
+					return override;
+				}
+			}
+		}
+
+		return current.alpha();
 	}
 
 	/** 三类目标共用的最终判定：模式决定内外和名单内外，反转取反。 */

@@ -3,7 +3,7 @@ package com.selectiverendering.blockentity;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.jspecify.annotations.NonNull;
 
-/** 包装顶点消费者，覆盖顶点透明度。 */
+/** 包装顶点消费者，把顶点透明度乘上给定的 alpha。 */
 public class AlphaVertexConsumer implements VertexConsumer {
 	private final VertexConsumer base;
 	private final int alpha;
@@ -13,15 +13,19 @@ public class AlphaVertexConsumer implements VertexConsumer {
 		this.alpha = alpha;
 	}
 
+	private int scale(int existing) {
+		return (existing == 0 ? 255 : existing) * alpha / 255;
+	}
+
 	@Override
 	public @NonNull VertexConsumer setColor(int red, int green, int blue, int alpha) {
-		base.setColor(red, green, blue, this.alpha);
+		base.setColor(red, green, blue, scale(alpha));
 		return this;
 	}
 
 	@Override
 	public @NonNull VertexConsumer setColor(int argb) {
-		base.setColor((argb & 0x00FFFFFF) | (alpha << 24));
+		base.setColor((argb & 0x00FFFFFF) | (scale(argb >>> 24) << 24));
 		return this;
 	}
 

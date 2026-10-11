@@ -103,5 +103,7 @@
   "selective_rendering.config.region_merge": "合并到",
   "selective_rendering.config.region_merge_apply": "合并",
   "selective_rendering.config.region_merge_tip": "把所有范围并入选中的选区，设置以目标选区为准，名单取并集",
-  "selective_rendering.config.region_merge_none": "没有其它选区"
+  "selective_rendering.config.region_merge_none": "没有其它选区",
+  "selective_rendering.config.name.region_alpha": "覆盖透明度",
+  "selective_rendering.config.comment.region_alpha": "-1 跟随全局透明度；0 到 255 是这个选区自己的 alpha：0 完全透明，255 不透明"
 }

@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import java.util.ArrayList;
 import java.util.List;
 
+import fi.dy.masa.malilib.config.options.ConfigInteger;
 import fi.dy.masa.malilib.gui.GuiConfigsBase.ConfigOptionWrapper;
 
 final class RegionConfigs {
@@ -30,6 +31,10 @@ final class RegionConfigs {
 
 		rows.add(new ConfigOptionWrapper(new RegionTargetsConfig(handle)));
 
+		ConfigInteger alpha = new ConfigInteger("region_alpha", -1, -1, 255, true).apply(ModConfigs.KEY);
+		alpha.setIntegerValue(region.options().alphaOverride());
+		alpha.setValueChangeCallback(config -> handle.update(options -> options.withAlphaOverride(config.getIntegerValue())));
+
 		SuggestingStringList rules = new SuggestingStringList("region_rules", SuggestKind.BLOCK).apply(ModConfigs.KEY);
 		rules.setStrings(region.options().ruleSources());
 		rules.setValueChangeCallback(config -> handle.update(options -> options.withRuleSources(config.getStrings())));
@@ -42,7 +47,7 @@ final class RegionConfigs {
 		particles.setStrings(region.options().particleTypes());
 		particles.setValueChangeCallback(config -> handle.update(options -> options.withParticleTypes(config.getStrings())));
 
-		rows.addAll(ConfigOptionWrapper.createFor(List.of(rules, entities, particles)));
+		rows.addAll(ConfigOptionWrapper.createFor(List.of(alpha, rules, entities, particles)));
 		rows.add(new ConfigOptionWrapper(new RegionMergeConfig(handle)));
 		return rows;
 	}

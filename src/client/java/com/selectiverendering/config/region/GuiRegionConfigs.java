@@ -15,6 +15,7 @@ import fi.dy.masa.malilib.gui.GuiConfigsBase;
 import fi.dy.masa.malilib.gui.button.ButtonGeneric;
 import fi.dy.masa.malilib.gui.widgets.WidgetConfigOption;
 import fi.dy.masa.malilib.gui.widgets.WidgetListConfigOptions;
+import fi.dy.masa.malilib.render.GuiContext;
 
 /** 单个选区的设置界面 */
 public final class GuiRegionConfigs extends GuiConfigsBase {
@@ -79,6 +80,17 @@ public final class GuiRegionConfigs extends GuiConfigsBase {
 				}
 
 				return super.createListEntryWidget(x, y, listIndex, isOdd, entry);
+			}
+
+			@Override
+			public void drawContents(GuiContext ctx, int mouseX, int mouseY, float partialTicks) {
+				super.drawContents(ctx, mouseX, mouseY, partialTicks);
+
+				for (WidgetConfigOption widget : this.listWidgets) {
+					if (widget instanceof WidgetRegionMerge row) {
+						row.drawOpenDropdown(ctx, mouseX, mouseY);
+					}
+				}
 			}
 		};
 	}

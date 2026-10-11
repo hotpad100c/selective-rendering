@@ -31,6 +31,6 @@ public class EntityRenderDispatcherMixin {
 			return;
 		}
 
-		original.call(renderState, camera, x, y, z, poseStack, alpha > 0 ? new SelectiveSubmitNodeCollector(submitNodeCollector) : submitNodeCollector);
+		original.call(renderState, camera, x, y, z, poseStack, alpha > 0 ? new SelectiveSubmitNodeCollector(submitNodeCollector, alpha) : submitNodeCollector);
 	}
 }

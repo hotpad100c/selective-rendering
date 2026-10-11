@@ -682,6 +682,7 @@ public final class SelectiveRenderingManager {
 		entry.rules = new ArrayList<>(region.options().ruleSources());
 		entry.entityTypes = new ArrayList<>(region.options().entityTypes());
 		entry.particleTypes = new ArrayList<>(region.options().particleTypes());
+		entry.alphaOverride = region.options().alphaOverride();
 		return entry;
 	}
 
@@ -714,7 +715,7 @@ public final class SelectiveRenderingManager {
 			java.util.UUID.randomUUID(),
 			entry.color == null ? Region.randomColor() : entry.color,
 			areas,
-			new RegionOptions(entry.blocks, entry.entities, entry.particles, entry.rules, entry.entityTypes, entry.particleTypes)
+			new RegionOptions(entry.blocks, entry.entities, entry.particles, entry.rules, entry.entityTypes, entry.particleTypes, entry.alphaOverride)
 		);
 	}
 

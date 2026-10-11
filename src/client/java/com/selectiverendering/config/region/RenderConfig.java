@@ -40,6 +40,7 @@ public final class RenderConfig {
 	private final List<Region> particleRegions;
 	private final Area union;
 	private final boolean hasLocalRules;
+	private final boolean hasAlphaOverride;
 
 	private RenderConfig(Builder builder) {
 		this.mode = builder.mode;
@@ -66,6 +67,7 @@ public final class RenderConfig {
 		this.particleRegions = regions.stream().filter(added -> added.options().particles()).toList();
 		this.union = unionOf(blockRegions);
 		this.hasLocalRules = blockRegions.stream().anyMatch(added -> !added.options().rules().isEmpty());
+		this.hasAlphaOverride = regions.stream().anyMatch(added -> added.options().alphaOverride() >= 0);
 	}
 
 	public Mode mode() {
@@ -165,6 +167,10 @@ public final class RenderConfig {
 
 	public boolean hasLocalRules() {
 		return hasLocalRules;
+	}
+
+	public boolean hasAlphaOverride() {
+		return hasAlphaOverride;
 	}
 
 	@Nullable

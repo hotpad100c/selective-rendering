@@ -231,7 +231,7 @@ synchronized (LOCK) {
 「范围 / 编辑 / 删除」。点编辑打开 `GuiRegionConfigs`（和 MaLiLib 的列表编辑一样是个子界面，关闭或点返回回到
 选区列表并恢复滚动位置），里面是 `RegionConfigs` 生成的行：每个范围一组（`WidgetRegionArea` 的「独立 / 删除」加两个角点输入 `WidgetRegionCorner`）、
 一行 `WidgetRegionTargets`（方块 / 实体 / 粒子，每项后跟一个方形小按钮），以及方块 / 实体 / 粒子三份本地名单
-（标准 `ConfigStringList`），最后是 `WidgetRegionMerge` 的「合并到」。改动经 `RegionEditor.updateRegion` 按 id 替换 `REGIONS` 里的
+（标准 `ConfigStringList`），最后是 `WidgetRegionMerge` 的「合并到」（下拉框选目标，和渲染模式那一行一样需要列表控件在 `drawContents` 里补画展开的下拉框）。改动经 `RegionEditor.updateRegion` 按 id 替换 `REGIONS` 里的
 对应项，并触发重建和光照重算。界面里持有的是 `RegionHandle`，每次按 id 取最新版本，所以独立 / 合并之后仍指向同一个选区。
 
 方块 / 实体 / 粒子名单（全局方块名单、记录名单、选区里的三份本地名单）是 `SuggestingStringList`，带一个 `SuggestKind`。
@@ -263,7 +263,10 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
   选中的选区线更粗、填充更深。
 - 魔杖：中键对着角点选角点，对着选区选选区（`RegionEditor.selectAlongRay`），对着空气清空选择。选中了选区时，
   选区键 + 左键添加的范围和记录器记录出的范围并入它（`addAreas`），没选中时新建选区；选区键 + 左键对着某个范围时删除这个范围。
-- 合并（`Region.merge`）：目标选区的设置优先，勾选项丢弃被合并方的，三份名单取并集（`RegionOptions.mergedWith`）；
+- 覆盖透明度：`RegionOptions.alphaOverride`，-1 跟随全局，0..255 是这个选区自己的 alpha（0 完全透明，255 不透明）。方块、实体、
+  粒子命中时取位置所在选区的覆盖值（`RegionTargets.overriddenAlpha`；选区外模式没有"所在选区"，用全局值）；实体和方块实体的提交器
+  （`SelectiveSubmitNodeCollector`）带着这个 alpha，不再读全局值。SNBT 里的键是 `alpha`，只有 >= 0 时才写。
+- 合并（`Region.merge`）：目标选区的设置优先，勾选项和覆盖透明度丢弃被合并方的，三份名单取并集（`RegionOptions.mergedWith`）；
   独立（`RegionEditor.detachArea`）复制原选区的设置并分配新的随机颜色。
 - 实体：`mixin/entity/EntityRenderDispatcherMixin` 包装 `submit`，命中则完全隐藏（透明度 0）或套上
   `SelectiveSubmitNodeCollector`。选区可以带实体类型名单（空 = 所有实体）；名单里没有该类型的实体不受影响。
@@ -271,6 +274,9 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
   `RenderType`，所以同材质、不在选区内的实体不会跟着变淡。物品（掉落物）的 RenderType 是逐个四边形决定的、
   多半不混合，所以 `submitItem` 改为把四边形按半透明变体分组，用 `submitCustomGeometry` 自己画（会丢失附魔光效）；
   方块模型等少数路径仍走 `HiddenRenderTypes` 标记。
+  `TranslucentRenderTypes.variant` 为没有混合的类型找顶点格式一致的半透明版本：普通实体贴图用 `entityTranslucent`，信标光柱用
+  `beaconBeam(texture, true)`。`AlphaVertexConsumer` 把顶点原有的 alpha 乘上透明度（不是替换），所以外层本来就很淡的光柱不会变得更不透明。
+  结构方块的边框线是 Gizmo，不经过提交器，不受影响。
 - 粒子的类型：`ParticleEngineMixin` 在 `createParticle` 里把 `ParticleOptions` 的类型记到粒子上（`ParticleMixin` /
   `ParticleTypeHolder`），粒子类型名单按它匹配；不经 `createParticle` 加入的粒子没有类型，只在名单为空时命中。
 - 粒子：透明度为 0 时 `mixin/particle/ParticleEngineMixin` 在 `add` 处丢弃；大于 0 时

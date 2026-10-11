@@ -103,5 +103,7 @@
   "selective_rendering.config.region_merge": "Merge into",
   "selective_rendering.config.region_merge_apply": "Merge",
   "selective_rendering.config.region_merge_tip": "Move every area into the chosen region. Its settings win; lists are combined",
-  "selective_rendering.config.region_merge_none": "No other region"
+  "selective_rendering.config.region_merge_none": "No other region",
+  "selective_rendering.config.name.region_alpha": "Alpha override",
+  "selective_rendering.config.comment.region_alpha": "-1 follows the global transparency. 0 to 255 is this region's own alpha: 0 is invisible, 255 is fully opaque"
 }

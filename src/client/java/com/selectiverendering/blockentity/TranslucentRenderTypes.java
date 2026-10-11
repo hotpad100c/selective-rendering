@@ -25,8 +25,8 @@ public final class TranslucentRenderTypes {
 			return renderType;
 		}
 
-		RenderType variant = RenderTypes.entityTranslucent(texture);
-		return variant.format() == renderType.format() ? variant : renderType;
+		RenderType variant = translucentOf(renderType, texture);
+		return variant == null ? renderType : variant;
 	}
 
 	/** 返回半透明变体并标，本帧所有使用该变体的绘制都会套上隐藏透明度。 */
@@ -41,13 +41,24 @@ public final class TranslucentRenderTypes {
 			return renderType;
 		}
 
-		RenderType variant = RenderTypes.entityTranslucent(texture);
-		if (variant.format() != renderType.format()) {
+		RenderType variant = translucentOf(renderType, texture);
+		if (variant == null) {
 			return renderType;
 		}
 
 		HiddenRenderTypes.mark(variant);
 		return variant;
+	}
+
+	/** 找顶点格式和原类型一致的半透明类型：普通实体贴图用 entityTranslucent，信标光柱用它自己的半透明版本。 */
+	private static RenderType translucentOf(RenderType original, Identifier texture) {
+		RenderType entity = RenderTypes.entityTranslucent(texture);
+		if (entity.format() == original.format()) {
+			return entity;
+		}
+
+		RenderType beam = RenderTypes.beaconBeam(texture, true);
+		return beam.format() == original.format() ? beam : null;
 	}
 
 	private static Identifier textureOf(RenderType renderType) {

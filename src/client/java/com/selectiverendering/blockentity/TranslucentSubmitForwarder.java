@@ -52,6 +52,8 @@ import java.util.Map;
 abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector {
 	protected abstract OrderedSubmitNodeCollector target();
 
+	protected abstract int alpha();
+
 	/**将物品窜改进半透明管道 */
 	private void submitFadedItem(PoseStack poseStack, int lightCoords, int overlayCoords, int[] tintLayers, List<BakedQuad> quads) {
 		Map<RenderType, List<BakedQuad>> groups = new LinkedHashMap<>();
@@ -76,11 +78,11 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	}
 
 	/** 把隐藏透明度乘进颜色的 alpha；调用方传入没有 alpha 的颜色时按不透明处理。 */
-	private static int tinted(int color) {
+	private int tinted(int color) {
 		int existing = color >>> 24;
-		int alpha = (existing == 0 ? 255 : existing) * AlphaGetter.getHiddenAlpha() / 255;
+		int scaled = (existing == 0 ? 255 : existing) * alpha() / 255;
 
-		return (color & 0x00FFFFFF) | (alpha << 24);
+		return (color & 0x00FFFFFF) | (scaled << 24);
 	}
 
 
@@ -158,7 +160,7 @@ abstract class TranslucentSubmitForwarder implements OrderedSubmitNodeCollector 
 	@Override
 	public void submitCustomGeometry(@NonNull PoseStack poseStack, @NonNull RenderType renderType, SubmitNodeCollector.@NonNull CustomGeometryRenderer renderer) {
 		target().submitCustomGeometry(poseStack, TranslucentRenderTypes.variant(renderType),
-			(pose, consumer) -> renderer.render(pose, new AlphaVertexConsumer(consumer, AlphaGetter.getHiddenAlpha())));
+			(pose, consumer) -> renderer.render(pose, new AlphaVertexConsumer(consumer, alpha())));
 	}
 
 
