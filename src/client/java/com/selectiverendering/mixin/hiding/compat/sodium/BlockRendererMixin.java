@@ -80,14 +80,11 @@ public class BlockRendererMixin {
 	@Inject(method = "bufferQuad", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onBufferQuad(MutableQuadViewImpl quad, float[] brightnesses, Material material, CallbackInfo ci) {
 		if (this.selectiveRendering$pos != null && TerrainTranslucency.projecting(this.selectiveRendering$pos)) {
-			// 朝着范围外的面（贴着范围外的方块）：Sodium 按外面的方块算出来的 AO 是黑的，
-			// 这种面只用方向性阴影，不要 AO（不论它是因为投影、还是因为选区隐藏才被保留下来的）。
-			// 只因为投影才保留的面还不能进真实的网格。
+			// 只因为投影才保留的面不能进真实的网格。
 			Direction face = quad.getCullFace();
-			boolean boundary = face != null && TerrainTranslucency.projectionBoundary(this.selectiveRendering$pos, BlockPosScratch.offset(this.selectiveRendering$pos, face));
 			boolean forced = face != null && (this.selectiveRendering$context().selectiveRendering$forcedFaces() & (1 << face.ordinal())) != 0;
 
-			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false, material.pass.isTranslucent(), boundary));
+			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false, material.pass.isTranslucent()));
 			TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
 
 			if (forced) {
@@ -135,12 +132,12 @@ public class BlockRendererMixin {
 	@Unique
 	private void selectiveRendering$capture(MutableQuadViewImpl quad, float[] brightnesses, int alpha) {
 		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
-		TerrainTranslucency.addCaptured(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true, false));
+		TerrainTranslucency.addCaptured(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true, true));
 	}
 
 	/** 把 Sodium 的一个四边形转成区段内坐标的四边形；capture 为真时边界面向内收，透明度跟随全局。 */
 	@Unique
-	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture, boolean translucent, boolean flatShade) {
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture, boolean translucent) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -160,7 +157,8 @@ public class BlockRendererMixin {
 			uvs[i * 2 + 1] = quad.getTexV(source);
 
 			int color = quad.baseColor(source);
-			float shade = flatShade ? TerrainTranslucency.directionalShade(quad.getCullFace()) : Math.min(1.0F, brightnesses[source]);
+			// 投影的四边形不烘焙阴影和 AO，之后按投影自己的光照场再加。
+			float shade = capture ? Math.min(1.0F, brightnesses[source]) : 1.0F;
 			int red = (int) (((color >> 16) & 0xFF) * shade);
 			int green = (int) (((color >> 8) & 0xFF) * shade);
 			int blue = (int) ((color & 0xFF) * shade);
@@ -169,7 +167,7 @@ public class BlockRendererMixin {
 			lights[i] = quad.getLight(source);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null, !capture);
 	}
 
 	@Unique

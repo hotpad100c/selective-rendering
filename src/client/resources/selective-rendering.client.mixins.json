@@ -7,6 +7,7 @@
 		"hiding.blockentity.BlockEntityRenderDispatcherMixin",
 		"hiding.blockentity.BlockFeatureRendererMixin",
 		"hiding.blockentity.BufferSourceMixin",
+		"hiding.blockentity.MovingBlockRenderStateMixin",
 		"hiding.blockentity.FeatureRenderDispatcherMixin",
 		"hiding.blockentity.RenderSetupAccessor",
 		"hiding.blockentity.RenderTypeAccessor",

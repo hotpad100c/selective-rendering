@@ -1,6 +1,7 @@
 package com.selectiverendering.mixin.hiding.blockentity;
 
 //? if >=26.2 {
+import com.selectiverendering.render.hiding.ProjectedMovingBlock;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -44,7 +45,7 @@ public class BlockFeatureRendererMixin {
 		long seed,
 		Operation<Void> original
 	) {
-		MovingBlockRenderContext.set(AlphaGetter.getAlpha(state, pos, true));
+		MovingBlockRenderContext.set(level instanceof ProjectedMovingBlock projected && projected.selectiveRendering$projected() ? 255 : AlphaGetter.getAlpha(state, pos, true));
 
 		try {
 			original.call(blockRenderer, output, x, y, z, level, pos, state, model, seed);
@@ -74,6 +75,7 @@ public class BlockFeatureRendererMixin {
 }
 //?} else {
 /*import com.selectiverendering.render.hiding.AlphaGetter;
+import com.selectiverendering.render.hiding.ProjectedMovingBlock;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
@@ -123,7 +125,7 @@ public class BlockFeatureRendererMixin {
 		Operation<Void> original,
 		@Local MovingBlockRenderState renderState
 	) {
-		MovingBlockRenderContext.set(AlphaGetter.getAlpha(renderState.blockState, renderState.blockPos, true));
+		MovingBlockRenderContext.set(renderState instanceof ProjectedMovingBlock projected && projected.selectiveRendering$projected() ? 255 : AlphaGetter.getAlpha(renderState.blockState, renderState.blockPos, true));
 
 		try {
 			original.call(blockRenderer, output, x, y, z, level, pos, state, model, seed);

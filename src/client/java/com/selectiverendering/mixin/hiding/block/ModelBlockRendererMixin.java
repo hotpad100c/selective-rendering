@@ -35,7 +35,7 @@ import java.util.List;
 
 /** 为原版方块渲染应用透明度、半透明材质和面剔除修正。 */
 @Mixin(ModelBlockRenderer.class)
-public class ModelBlockRendererMixin {
+public abstract class ModelBlockRendererMixin {
 	/** 当前线程正在渲染的方块透明度，-1 表示正常渲染。 */
 	@Unique
 	private static final ThreadLocal<Integer> selectiveRendering$blockAlpha = ThreadLocal.withInitial(() -> -1);
@@ -44,9 +44,15 @@ public class ModelBlockRendererMixin {
 	@Unique
 	private static final ThreadLocal<BlockPos> selectiveRendering$blockPos = new ThreadLocal<>();
 
+	@Unique
+	private static final ThreadLocal<int[]> selectiveRendering$tint = ThreadLocal.withInitial(() -> new int[]{-1});
+
 	@Shadow
 	@Final
 	private QuadInstance quadInstance;
+
+	@Shadow
+	protected abstract int getTintColor(BlockAndTintGetter level, BlockState state, BlockPos pos, int tintIndex);
 
 	@Inject(method = "tesselateBlock", at = @At("HEAD"), require = 1)
 	private void selectiveRendering$beginBlock(
@@ -140,6 +146,9 @@ public class ModelBlockRendererMixin {
 
 	@Inject(method = "putQuadWithTint", at = @At("HEAD"), require = 1)
 	private void selectiveRendering$putQuadWithTint(BlockQuadOutput output, float x, float y, float z, BlockAndTintGetter level, BlockState state, BlockPos pos, BakedQuad quad, CallbackInfo ci) {
+		int tintIndex = quad.materialInfo().tintIndex();
+		selectiveRendering$tint.get()[0] = tintIndex == -1 ? -1 : this.getTintColor(level, state, pos, tintIndex);
+
 		if (MovingBlockRenderContext.alpha() != -1) {
 			return;
 		}
@@ -169,7 +178,7 @@ public class ModelBlockRendererMixin {
 			boolean forced = (selectiveRendering$forcedFaces.get()[0] & (1 << quad.direction().ordinal())) != 0;
 			boolean boundary = TerrainTranslucency.projectionBoundary(blockPos, blockPos.relative(quad.direction()));
 
-			TerrainTranslucency.addProjected(blockPos, VanillaCapture.toQuad(x, y, z, quad, instance, 255, false, boundary));
+			TerrainTranslucency.addProjected(blockPos, VanillaCapture.toQuad(x, y, z, quad, instance, 255, false, boundary, selectiveRendering$tint.get()[0]));
 			TerrainTranslucency.addSprite(quad.materialInfo().sprite());
 
 			if (forced) {

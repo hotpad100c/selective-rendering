@@ -243,7 +243,7 @@ public class DefaultFluidRendererMixin {
 		}
 
 		int packedNormal = quad.getFaceNormal();
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null, false);
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

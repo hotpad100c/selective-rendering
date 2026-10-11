@@ -32,10 +32,10 @@ public final class VanillaCapture {
 
 	/** capture 为真时用于半透明截流（边界面向内收、透明度跟随全局），否则原样转换（投影烘焙）。 */
 	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture) {
-		return toQuad(x, y, z, quad, instance, alpha, capture, false);
+		return toQuad(x, y, z, quad, instance, alpha, capture, false, -1);
 	}
 
-	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture, boolean flatShade) {
+	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture, boolean flatShade, int tint) {
 		boolean translucent = capture || quad.materialInfo().layer() == ChunkSectionLayer.TRANSLUCENT;
 		float inset = capture ? CAPTURE_INSET : 0.0F;
 		float[] positions = new float[12];
@@ -61,20 +61,15 @@ public final class VanillaCapture {
 
 			int color = instance.getColor(i);
 
-			if (flatShade) {
-				int red = (color >> 16) & 0xFF;
-				int green = (color >> 8) & 0xFF;
-				int blue = color & 0xFF;
-				int max = Math.max(1, Math.max(red, Math.max(green, blue)));
-				float shade = TerrainTranslucency.directionalShade(direction) * 255.0F / max;
-				color = ((int) Math.min(255.0F, red * shade) << 16) | ((int) Math.min(255.0F, green * shade) << 8) | (int) Math.min(255.0F, blue * shade);
+			if (!capture) {
+				color = tint == -1 ? 0xFFFFFF : tint;
 			}
 
 			colors[i] = color | 0xFF000000;
 			lights[i] = instance.getLightCoordsWithEmission(i, emission);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null, !capture);
 	}
 
 	/** 半透明流体截流用的一个顶点；凑够四个就成为一个四边形。 */
@@ -143,6 +138,6 @@ public final class VanillaCapture {
 			lights[i] = Float.floatToRawIntBits(data[i * STRIDE + 6]);
 		}
 
-		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null);
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha(), translucent, null, false);
 	}
 }

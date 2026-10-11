@@ -91,7 +91,8 @@ public class InfoRenderer {
             AABB source = area.box();
             AABB projected = source.move(ox, oy, oz);
 
-            Gizmos.cuboid(projected, GizmoStyle.strokeAndFill(stroke, width, fill));
+            Gizmos.cuboid(projected, GizmoStyle.stroke(stroke, width)).setAlwaysOnTop();
+            Gizmos.cuboid(projected, GizmoStyle.fill(fill));
 
             for (int corner = 0; corner < 8; corner++) {
                 double x = (corner & 1) == 0 ? source.minX : source.maxX;

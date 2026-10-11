@@ -13,9 +13,10 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public final class TerrainTranslucency {
 	// alpha 是截流时的透明度，global 表示它等于当时的全局透明度（之后跟随配置变化，不用重建）。
-	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global, boolean translucent, java.util.UUID region) {
+	/** raw 为真：颜色里还没有烘焙阴影和 AO（投影的四边形），重算光照时按投影自己的光照场再加。 */
+	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global, boolean translucent, java.util.UUID region, boolean raw) {
 			public Quad withRegion(java.util.UUID region) {
-			return new Quad(positions, uvs, colors, lights, normalX, normalY, normalZ, alpha, false, translucent, region);
+			return new Quad(positions, uvs, colors, lights, normalX, normalY, normalZ, alpha, false, translucent, region, raw);
 		}
 	}
 

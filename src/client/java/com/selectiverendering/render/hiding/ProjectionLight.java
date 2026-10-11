@@ -240,13 +240,78 @@ public final class ProjectionLight {
 				);
 			}
 
+			int[] colors = quad.colors();
+
+			if (quad.raw()) {
+				float directional = TerrainTranslucency.directionalShade(TerrainTranslucency.directionOf(quad.normalX(), quad.normalY(), quad.normalZ()));
+				colors = new int[4];
+
+				for (int vertex = 0; vertex < 4; vertex++) {
+					float shade = directional * vertexAo(
+						field,
+						positions[vertex * 3] + shiftX, positions[vertex * 3 + 1] + shiftY, positions[vertex * 3 + 2] + shiftZ,
+						quad.normalX(), quad.normalY(), quad.normalZ()
+					);
+
+					int color = quad.colors()[vertex];
+					colors[vertex] = (255 << 24)
+						| ((int) (((color >> 16) & 0xFF) * shade) << 16)
+						| ((int) (((color >> 8) & 0xFF) * shade) << 8)
+						| (int) ((color & 0xFF) * shade);
+				}
+			}
+
 			result.add(new TerrainTranslucency.Quad(
-				positions, quad.uvs(), quad.colors(), lights,
-				quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global(), quad.translucent(), quad.region()
+				positions, quad.uvs(), colors, lights,
+				quad.normalX(), quad.normalY(), quad.normalZ(), quad.alpha(), quad.global(), quad.translucent(), quad.region(), false
 			));
 		}
 
 		return result;
+	}
+
+	/** 两份四边形列表的光照是不是逐个相同（只比光照，调用方保证是同一份源）。 */
+	public static boolean sameLights(List<TerrainTranslucency.Quad> a, List<TerrainTranslucency.Quad> b) {
+		if (a.size() != b.size()) {
+			return false;
+		}
+
+		for (int i = 0; i < a.size(); i++) {
+			if (!java.util.Arrays.equals(a.get(i).lights(), b.get(i).lights())) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static float vertexAo(Field field, float x, float y, float z, float nx, float ny, float nz) {
+		int baseX = (int) Math.floor(x - 0.5F);
+		int baseY = (int) Math.floor(y - 0.5F);
+		int baseZ = (int) Math.floor(z - 0.5F);
+		int count = 0;
+		int solid = 0;
+
+		for (int dx = 0; dx <= 1; dx++) {
+			for (int dy = 0; dy <= 1; dy++) {
+				for (int dz = 0; dz <= 1; dz++) {
+					int cx = baseX + dx;
+					int cy = baseY + dy;
+					int cz = baseZ + dz;
+
+					if ((cx + 0.5F - x) * nx + (cy + 0.5F - y) * ny + (cz + 0.5F - z) * nz <= 1.0E-4F) {
+						continue;
+					}
+
+					count++;
+					if (field.solid(cx, cy, cz)) {
+						solid++;
+					}
+				}
+			}
+		}
+
+		return count == 4 ? 1.0F - 0.8F * solid / 4.0F : 1.0F;
 	}
 
 	private static int vertexLight(Field field, float x, float y, float z, float nx, float ny, float nz) {

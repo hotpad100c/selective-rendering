@@ -95,7 +95,14 @@ public final class RetainedTerrain {
 	private static final List<GpuBuffer> GRAVEYARD = new ArrayList<>();
 	private static final Map<Object, Section> SECTIONS = new HashMap<>();
 	// 按投影自己的光照重算过的四边形；源四边形或光照场变了才重算。
-	private record Lit(List<TerrainTranslucency.Quad> source, int fieldVersion, List<TerrainTranslucency.Quad> quads) {
+	private static final class Lit {
+		// quads 是按 source 和 fieldVersion 算出来的结果，期间的新结果在 job 里算，算完才替换，所以不会有空窗。
+		List<TerrainTranslucency.Quad> source;
+		int fieldVersion = -1;
+		List<TerrainTranslucency.Quad> quads;
+		Future<List<TerrainTranslucency.Quad>> job;
+		List<TerrainTranslucency.Quad> jobSource;
+		int jobVersion;
 	}
 
 	private static final Map<TerrainTranslucency.ProjectionKey, Lit> LIT = new HashMap<>();
@@ -175,7 +182,50 @@ public final class RetainedTerrain {
 		return piece.global ? global : piece.alpha;
 	}
 
-	private record Section(List<TerrainTranslucency.Quad> source, List<BufferPice> pieces) {
+	private static final class Section {
+		final List<TerrainTranslucency.Quad> source;
+		final List<BufferPice> pieces;
+		// 新建的区段里半透明的块还没排好序之前，继续画上一份，免得顺序不对的半透明把后面的遮住（露出天空）。
+		Section prior;
+
+		Section(List<TerrainTranslucency.Quad> source, List<BufferPice> pieces) {
+			this.source = source;
+			this.pieces = pieces;
+		}
+
+		List<TerrainTranslucency.Quad> source() {
+			return source;
+		}
+
+		List<BufferPice> pieces() {
+			return pieces;
+		}
+
+		// 半透明的块都至少排过一次序了。
+		boolean ready() {
+			for (BufferPice piece : pieces) {
+				if (piece.translucent && piece.indexCount > 0 && piece.indexBuffer == null) {
+					return false;
+				}
+			}
+
+			return true;
+		}
+	}
+
+	private static void replace(Object key, Section old, Section next) {
+		if (old != null) {
+			if (old.ready()) {
+				next.prior = old;
+			}
+			else {
+				next.prior = old.prior;
+				old.prior = null;
+				retire(old);
+			}
+		}
+
+		SECTIONS.put(key, next);
 	}
 
 	// CPU 侧已经建好的一组顶点数据，等渲染线程上传。
@@ -324,15 +374,43 @@ public final class RetainedTerrain {
 			}
 
 			SectionPos section = SectionPos.of(entry.getKey().section());
-			Lit lit = LIT.get(entry.getKey());
+			Lit lit = LIT.computeIfAbsent(entry.getKey(), ignored -> new Lit());
 
-			if (lit == null || lit.source() != entry.getValue() || lit.fieldVersion() != field.version) {
-				lit = new Lit(entry.getValue(), field.version,
-					ProjectionLight.relight(entry.getValue(), section.minBlockX(), section.minBlockY(), section.minBlockZ(), active.area(), field));
-				LIT.put(entry.getKey(), lit);
+			if (lit.job != null && lit.job.isDone()) {
+				try {
+					lit.quads = lit.job.get();
+					lit.source = lit.jobSource;
+					lit.fieldVersion = lit.jobVersion;
+				}
+				catch (Exception exception) {
+					Log.error("[projection] relight failed", exception);
+				}
+
+				lit.job = null;
 			}
 
-			sources.add(new Source(entry.getKey(), lit.quads(), TerrainTranslucency.projectedSprites(entry.getKey()),
+			if (lit.job == null && (lit.quads == null || lit.source != entry.getValue() || lit.fieldVersion != field.version)) {
+				List<TerrainTranslucency.Quad> source = entry.getValue();
+				List<TerrainTranslucency.Quad> previous = lit.quads;
+				boolean sameSource = lit.source == source;
+				ProjectionAreas.Active area = active;
+				ProjectionLight.Field usedField = field;
+
+				lit.jobSource = source;
+				lit.jobVersion = field.version;
+				lit.job = POOL.submit(() -> {
+					List<TerrainTranslucency.Quad> relit = ProjectionLight.relight(source, section.minBlockX(), section.minBlockY(), section.minBlockZ(), area.area(), usedField);
+
+					// 只是光照场变了、这个区段的光照其实没变：沿用原来的列表，缓冲就不用重建。
+					return sameSource && previous != null && ProjectionLight.sameLights(previous, relit) ? previous : relit;
+				});
+			}
+
+			if (lit.quads == null) {
+				continue;
+			}
+
+			sources.add(new Source(entry.getKey(), lit.quads, TerrainTranslucency.projectedSprites(entry.getKey()),
 				section.minBlockX() + active.offsetX(), section.minBlockY() + active.offsetY(), section.minBlockZ() + active.offsetZ(), 16, 16, 16));
 		}
 
@@ -376,11 +454,7 @@ public final class RetainedTerrain {
 					// Iris 的扩展顶点格式只有此时在渲染线程才能写对，只能同步构建。
 					if (budget > 0) {
 						Section rebuilt = build(quads, type);
-						if (built != null) {
-							retire(built);
-						}
-
-						SECTIONS.put(source.key(), rebuilt);
+						replace(source.key(), built, rebuilt);
 						built = rebuilt;
 						budget -= quads.size();
 					}
@@ -402,11 +476,7 @@ public final class RetainedTerrain {
 
 						try {
 							Section uploaded = upload(quads, pending.future().get());
-							if (built != null) {
-								retire(built);
-							}
-
-							SECTIONS.put(source.key(), uploaded);
+							replace(source.key(), built, uploaded);
 							built = uploaded;
 							uploadBudget -= quads.size();
 						}
@@ -427,8 +497,46 @@ public final class RetainedTerrain {
 
 			boolean marked = false;
 
-			for (BufferPice piece : built.pieces()) {
-				if (piece.indexCount <= 0 || alphaOf(piece) <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
+			Section drawn = built;
+			if (built.prior != null) {
+				if (built.ready()) {
+					retire(built.prior);
+					built.prior = null;
+				}
+				else {
+					drawn = built.prior;
+				}
+			}
+
+			float localX = (float) (position.x - minX);
+			float localY = (float) (position.y - minY);
+			float localZ = (float) (position.z - minZ);
+
+			// 新建的区段和正在画的区段都要排序（排好序之前新的不画）。
+			for (Section section : drawn == built ? List.of(built) : List.of(built, drawn)) {
+				for (BufferPice piece : section.pieces()) {
+					if (piece.indexCount <= 0) {
+						continue;
+					}
+
+					if (piece.sortJob != null && piece.sortJob.isDone() && sortUploads > 0) {
+						sortUploads--;
+						uploadSort(piece);
+					}
+
+					float moveX = localX - piece.sortX;
+					float moveY = localY - piece.sortY;
+					float moveZ = localZ - piece.sortZ;
+
+					if (piece.sortJob == null && (piece.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
+						startSort(piece, localX, localY, localZ);
+					}
+				}
+			}
+
+			for (BufferPice piece : drawn.pieces()) {
+				if (piece.indexCount <= 0 || alphaOf(piece) <= 0 || (piece.translucent && piece.indexBuffer == null)
+					|| !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
 					continue;
 				}
 
@@ -437,23 +545,6 @@ public final class RetainedTerrain {
 					for (TextureAtlasSprite sprite : source.sprites()) {
 						SodiumSprites.markActive(sprite);
 					}
-				}
-
-				float localX = (float) (position.x - minX);
-				float localY = (float) (position.y - minY);
-				float localZ = (float) (position.z - minZ);
-
-				if (piece.sortJob != null && piece.sortJob.isDone() && sortUploads > 0) {
-					sortUploads--;
-					uploadSort(piece);
-				}
-
-				float moveX = localX - piece.sortX;
-				float moveY = localY - piece.sortY;
-				float moveZ = localZ - piece.sortZ;
-
-				if (piece.sortJob == null && (piece.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
-					startSort(piece, localX, localY, localZ);
 				}
 
 				placedList.add(new Placed(piece, (float) (minX - position.x), (float) (minY - position.y), (float) (minZ - position.z)));
@@ -719,6 +810,11 @@ public final class RetainedTerrain {
 	}
 
 	private static void retire(Section section) {
+		if (section.prior != null) {
+			retire(section.prior);
+			section.prior = null;
+		}
+
 		for (BufferPice piece : section.pieces()) {
 			piece.retired = true;
 			if (piece.sortJob != null) {
@@ -837,12 +933,14 @@ public final class RetainedTerrain {
 		GRAVEYARD.forEach(GpuBuffer::close);
 		GRAVEYARD.clear();
 
-		for (Section section : SECTIONS.values()) {
-			for (BufferPice piece : section.pieces()) {
-				piece.retired = true;
-				piece.buffer.close();
-				if (piece.indexBuffer != null) {
-					piece.indexBuffer.close();
+		for (Section top : SECTIONS.values()) {
+			for (Section section = top; section != null; section = section.prior) {
+				for (BufferPice piece : section.pieces()) {
+					piece.retired = true;
+					piece.buffer.close();
+					if (piece.indexBuffer != null) {
+						piece.indexBuffer.close();
+					}
 				}
 			}
 		}
