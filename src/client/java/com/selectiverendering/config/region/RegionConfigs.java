@@ -48,6 +48,7 @@ final class RegionConfigs {
 		particles.setValueChangeCallback(config -> handle.update(options -> options.withParticleTypes(config.getStrings())));
 
 		rows.addAll(ConfigOptionWrapper.createFor(List.of(alpha, rules, entities, particles)));
+		rows.add(new ConfigOptionWrapper(new RegionOffsetConfig(handle)));
 		rows.add(new ConfigOptionWrapper(new RegionMergeConfig(handle)));
 		return rows;
 	}

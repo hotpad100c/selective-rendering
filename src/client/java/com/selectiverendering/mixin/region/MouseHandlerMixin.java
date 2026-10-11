@@ -1,5 +1,7 @@
 package com.selectiverendering.mixin.region;
 
+import com.selectiverendering.region.Region;
+import com.selectiverendering.interaction.ProjectionControls;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import com.selectiverendering.SelectiveRendering;
@@ -54,6 +56,13 @@ public class MouseHandlerMixin {
 		Window handle = minecraft.getWindow();
 
 		if (Platform.isKeyDown(handle, InputConstants.KEY_LCONTROL)) {
+			Region selected = SelectiveRenderingManager.selectedRegion();
+			if (selected != null) {
+				ProjectionControls.scroll(selected, lookingDirection(minecraft), direction);
+				ci.cancel();
+				return;
+			}
+
 			SelectiveRenderingManager.cycleMode(direction);
 			ci.cancel();
 			return;

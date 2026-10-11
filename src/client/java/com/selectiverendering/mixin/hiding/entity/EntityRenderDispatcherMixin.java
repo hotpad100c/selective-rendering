@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.entity;
 
+import com.selectiverendering.render.hiding.ProjectionPass;
 import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -26,6 +27,11 @@ public class EntityRenderDispatcherMixin {
 		SubmitNodeCollector submitNodeCollector,
 		Operation<Void> original
 	) {
+		if (ProjectionPass.active()) {
+			original.call(renderState, camera, x, y, z, poseStack, submitNodeCollector);
+			return;
+		}
+
 		int alpha = RegionTargets.entityAlpha(renderState.entityType, ((EntityIdHolder) renderState).selectiveRendering$entityId(), renderState.x, renderState.y, renderState.z);
 		if (alpha == 0) {
 			return;

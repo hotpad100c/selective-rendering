@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.selectiverendering.render.hiding.MovingBlockRenderContext;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.VanillaCapture;
 import com.selectiverendering.render.hiding.TerrainTranslucency;
@@ -38,7 +39,7 @@ public class FluidRendererMixin {
 
 	@Inject(method = "tesselate", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onTesselate(BlockAndTintGetter level, BlockPos pos, FluidRenderer.Output output, BlockState state, FluidState fluidState, CallbackInfo ci) {
-		int alpha = AlphaGetter.getFluidAlpha(state, pos);
+		int alpha = MovingBlockRenderContext.alpha() != -1 ? -1 : AlphaGetter.getFluidAlpha(state, pos);
 		ALPHA.set(alpha);
 		POS.set(pos);
 		LEVEL.set(level);
@@ -124,6 +125,11 @@ public class FluidRendererMixin {
 	/** 半透明流体截流：顶点交给常驻缓冲的采集，不写进区块。 */
 	@Inject(method = "vertex", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$captureVertex(VertexConsumer consumer, float x, float y, float z, int color, float u, float v, int light, CallbackInfo ci) {
+		BlockPos fluidPos = POS.get();
+		if (fluidPos != null && MovingBlockRenderContext.alpha() == -1 && TerrainTranslucency.projecting(fluidPos)) {
+			VanillaCapture.projectedFluidVertex(fluidPos, x, y, z, color, u, v, light);
+		}
+
 		int alpha = ALPHA.get();
 		if (alpha >= 0 && alpha < 255 && TerrainTranslucency.capturing() && (alpha > 0 || SelectiveRenderingManager.isBuildHiddenMesh())) {
 			VanillaCapture.fluidVertex(x, y, z, color, u, v, light, alpha);

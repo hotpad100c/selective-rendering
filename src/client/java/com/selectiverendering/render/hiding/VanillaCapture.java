@@ -1,5 +1,6 @@
 package com.selectiverendering.render.hiding;
 
+import net.minecraft.core.BlockPos;
 import com.mojang.blaze3d.vertex.QuadInstance;
 import com.selectiverendering.SelectiveRenderingManager;
 import net.minecraft.client.model.geom.builders.UVPair;
@@ -9,14 +10,28 @@ import org.joml.Vector3fc;
 
 public final class VanillaCapture {
 	private static final float CAPTURE_INSET = 0.005F;
+	// 原版流体逐顶点输出，四个顶点凑成一个四边形：每个顶点 7 个数（位置、uv、颜色位、光照位）。
 	private static final int STRIDE = 8;
-	private static final ThreadLocal<float[]> FLUID_VERTICES = ThreadLocal.withInitial(() -> new float[4 * STRIDE]);
-	private static final ThreadLocal<int[]> FLUID_COUNT = ThreadLocal.withInitial(() -> new int[1]);
+
+	private static final class FluidBuffer {
+		final float[] data = new float[4 * STRIDE];
+		int count;
+	}
+
+	// 半透明截流和投影各自一份，互不干扰地凑顶点。
+	private static final ThreadLocal<FluidBuffer> TRANSLUCENT_FLUID = ThreadLocal.withInitial(FluidBuffer::new);
+	private static final ThreadLocal<FluidBuffer> PROJECTED_FLUID = ThreadLocal.withInitial(FluidBuffer::new);
 
 	private VanillaCapture() {
 	}
 
 	public static void block(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha) {
+		TerrainTranslucency.add(toQuad(x, y, z, quad, instance, alpha, true));
+	}
+
+	/** capture 为真时用于半透明截流（边界面向内收、透明度跟随全局），否则原样转换（投影烘焙）。 */
+	public static TerrainTranslucency.Quad toQuad(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha, boolean capture) {
+		float inset = capture ? CAPTURE_INSET : 0.0F;
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -30,9 +45,9 @@ public final class VanillaCapture {
 
 		for (int i = 0; i < 4; i++) {
 			Vector3fc position = quad.position(i);
-			positions[i * 3] = x + position.x() - nx * CAPTURE_INSET;
-			positions[i * 3 + 1] = y + position.y() - ny * CAPTURE_INSET;
-			positions[i * 3 + 2] = z + position.z() - nz * CAPTURE_INSET;
+			positions[i * 3] = x + position.x() - nx * inset;
+			positions[i * 3 + 1] = y + position.y() - ny * inset;
+			positions[i * 3 + 2] = z + position.z() - nz * inset;
 
 			long uv = quad.packedUV(i);
 			uvs[i * 2] = UVPair.unpackU(uv);
@@ -42,13 +57,28 @@ public final class VanillaCapture {
 			lights[i] = instance.getLightCoordsWithEmission(i, emission);
 		}
 
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, alpha == SelectiveRenderingManager.config().alpha()));
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
 	}
 
+	/** 半透明流体截流用的一个顶点；凑够四个就成为一个四边形。 */
 	public static void fluidVertex(float x, float y, float z, int color, float u, float v, int light, int alpha) {
-		float[] data = FLUID_VERTICES.get();
-		int[] count = FLUID_COUNT.get();
-		int base = count[0] * STRIDE;
+		TerrainTranslucency.Quad quad = push(TRANSLUCENT_FLUID.get(), x, y, z, color, u, v, light, alpha, true);
+		if (quad != null) {
+			TerrainTranslucency.add(quad);
+		}
+	}
+
+	/** 投影用的一个顶点：复制给包含 pos 的每个投影范围。 */
+	public static void projectedFluidVertex(BlockPos pos, float x, float y, float z, int color, float u, float v, int light) {
+		TerrainTranslucency.Quad quad = push(PROJECTED_FLUID.get(), x, y, z, color, u, v, light, 255, false);
+		if (quad != null) {
+			TerrainTranslucency.addProjected(pos, quad);
+		}
+	}
+
+	private static TerrainTranslucency.Quad push(FluidBuffer buffer, float x, float y, float z, int color, float u, float v, int light, int alpha, boolean capture) {
+		float[] data = buffer.data;
+		int base = buffer.count * STRIDE;
 
 		data[base] = x;
 		data[base + 1] = y;
@@ -58,12 +88,12 @@ public final class VanillaCapture {
 		data[base + 5] = Float.intBitsToFloat(color | 0xFF000000);
 		data[base + 6] = Float.intBitsToFloat(light);
 
-		count[0]++;
-		if (count[0] < 4) {
-			return;
+		buffer.count++;
+		if (buffer.count < 4) {
+			return null;
 		}
 
-		count[0] = 0;
+		buffer.count = 0;
 
 		float ux = data[STRIDE] - data[0];
 		float uy = data[STRIDE + 1] - data[1];
@@ -96,6 +126,6 @@ public final class VanillaCapture {
 			lights[i] = Float.floatToRawIntBits(data[i * STRIDE + 6]);
 		}
 
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, alpha == SelectiveRenderingManager.config().alpha()));
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
 	}
 }

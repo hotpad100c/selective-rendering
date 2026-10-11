@@ -213,6 +213,49 @@ public final class RegionEditor {
 		return true;
 	}
 
+	/** 把选区的投影位移改变 (dx, dy, dz)，返回改变后的位移（x, y, z）；选区已不存在时返回 null。 */
+	@Nullable
+	public static int[] moveProjection(Region region, int dx, int dy, int dz) {
+		Region current = latest(region);
+		if (current == null) {
+			return null;
+		}
+
+		RegionOptions options = current.options();
+		int x = options.offsetX() + dx;
+		int y = options.offsetY() + dy;
+		int z = options.offsetZ() + dz;
+
+		updateRegion(current, current.withOptions(options.withOffset(x, y, z)));
+
+		// 第一次出现位移时，区块编译才开始为它收集四边形，范围内的区段要重建一次。
+		if (!options.hasOffset()) {
+			changed(current.areas(), List.of(), false);
+		}
+
+		return new int[]{x, y, z};
+	}
+
+	public static void resetProjection(Region region) {
+		Region current = latest(region);
+		if (current != null && current.options().hasOffset()) {
+			updateRegion(current, current.withOptions(current.options().withOffset(0, 0, 0)));
+		}
+	}
+
+	@Nullable
+	private static Region latest(Region region) {
+		synchronized (SelectiveRenderingManager.LOCK) {
+			for (Region candidate : SelectiveRenderingManager.REGIONS) {
+				if (candidate.equals(region)) {
+					return candidate;
+				}
+			}
+		}
+
+		return null;
+	}
+
 	/** 增删选区本地方块名单里的一项，返回是否是加入。 */
 	public static boolean toggleLocalRule(Region region, String source) {
 		return toggleLocal(region, source, RegionOptions::ruleSources, RegionOptions::withRuleSources);

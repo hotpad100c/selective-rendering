@@ -38,6 +38,9 @@ public final class RegionOptions {
 	private final List<String> entityTypes;
 	private final List<String> particleTypes;
 	private final int alphaOverride;
+	private final int offsetX;
+	private final int offsetY;
+	private final int offsetZ;
 
 	private final List<BlockMatchRule> rules;
 	private final List<EntityRule> entityRules;
@@ -46,8 +49,18 @@ public final class RegionOptions {
 		this(blocks, entities, particles, ruleSources, entityTypes, particleTypes, -1);
 	}
 
-	/** alphaOverride 为 -1 时跟随全局透明度，0..255 时是这个选区自己的 alpha（0 完全透明，255 不透明）。 */
 	public RegionOptions(boolean blocks, boolean entities, boolean particles, List<String> ruleSources, List<String> entityTypes, List<String> particleTypes, int alphaOverride) {
+		this(blocks, entities, particles, ruleSources, entityTypes, particleTypes, alphaOverride, 0, 0, 0);
+	}
+
+	/**
+	 * alphaOverride 为 -1 时跟随全局透明度，0..255 时是这个选区自己的 alpha（0 完全透明，255 不透明）；
+	 * offset 是投影位移：选区的内容会被投影到偏移后的位置，全 0 表示没有投影。
+	 */
+	public RegionOptions(boolean blocks, boolean entities, boolean particles, List<String> ruleSources, List<String> entityTypes, List<String> particleTypes, int alphaOverride, int offsetX, int offsetY, int offsetZ) {
+		this.offsetX = offsetX;
+		this.offsetY = offsetY;
+		this.offsetZ = offsetZ;
 		this.blocks = blocks;
 		this.alphaOverride = alphaOverride < 0 ? -1 : Math.min(alphaOverride, 255);
 		this.entities = entities;
@@ -109,24 +122,45 @@ public final class RegionOptions {
 		return alphaOverride;
 	}
 
+	public int offsetX() {
+		return offsetX;
+	}
+
+	public int offsetY() {
+		return offsetY;
+	}
+
+	public int offsetZ() {
+		return offsetZ;
+	}
+
+	/** 是否有投影位移。 */
+	public boolean hasOffset() {
+		return offsetX != 0 || offsetY != 0 || offsetZ != 0;
+	}
+
+	public RegionOptions withOffset(int x, int y, int z) {
+		return new RegionOptions(blocks, entities, particles, ruleSources, entityTypes, particleTypes, alphaOverride, x, y, z);
+	}
+
 	public RegionOptions withBlocks(boolean value) {
-		return new RegionOptions(value, entities, particles, ruleSources, entityTypes, particleTypes, alphaOverride);
+		return new RegionOptions(value, entities, particles, ruleSources, entityTypes, particleTypes, alphaOverride, offsetX, offsetY, offsetZ);
 	}
 
 	public RegionOptions withEntities(boolean value) {
-		return new RegionOptions(blocks, value, particles, ruleSources, entityTypes, particleTypes, alphaOverride);
+		return new RegionOptions(blocks, value, particles, ruleSources, entityTypes, particleTypes, alphaOverride, offsetX, offsetY, offsetZ);
 	}
 
 	public RegionOptions withParticles(boolean value) {
-		return new RegionOptions(blocks, entities, value, ruleSources, entityTypes, particleTypes, alphaOverride);
+		return new RegionOptions(blocks, entities, value, ruleSources, entityTypes, particleTypes, alphaOverride, offsetX, offsetY, offsetZ);
 	}
 
 	public RegionOptions withRuleSources(List<String> value) {
-		return new RegionOptions(blocks, entities, particles, value, entityTypes, particleTypes, alphaOverride);
+		return new RegionOptions(blocks, entities, particles, value, entityTypes, particleTypes, alphaOverride, offsetX, offsetY, offsetZ);
 	}
 
 	public RegionOptions withEntityTypes(List<String> value) {
-		return new RegionOptions(blocks, entities, particles, ruleSources, value, particleTypes, alphaOverride);
+		return new RegionOptions(blocks, entities, particles, ruleSources, value, particleTypes, alphaOverride, offsetX, offsetY, offsetZ);
 	}
 
 	public RegionOptions withParticleTypes(List<String> value) {
@@ -134,7 +168,7 @@ public final class RegionOptions {
 	}
 
 	public RegionOptions withAlphaOverride(int value) {
-		return new RegionOptions(blocks, entities, particles, ruleSources, entityTypes, particleTypes, value);
+		return new RegionOptions(blocks, entities, particles, ruleSources, entityTypes, particleTypes, value, offsetX, offsetY, offsetZ);
 	}
 
 	/** 以 this 为目标把 other 并进来：勾选项和透明度覆盖以 this 为准，三份名单取并集（this 的在前）。 */
@@ -144,7 +178,8 @@ public final class RegionOptions {
 			concat(ruleSources, other.ruleSources),
 			concat(entityTypes, other.entityTypes),
 			concat(particleTypes, other.particleTypes),
-			alphaOverride
+			alphaOverride,
+			offsetX, offsetY, offsetZ
 		);
 	}
 
@@ -220,10 +255,19 @@ public final class RegionOptions {
 			tag.putInt("alpha", alphaOverride);
 		}
 
+		if (hasOffset()) {
+			tag.putIntArray("offset", new int[]{offsetX, offsetY, offsetZ});
+		}
+
 		return tag;
 	}
 
 	public static RegionOptions fromTag(CompoundTag tag) {
+		int[] offset = tag.getIntArray("offset").orElse(new int[3]);
+		if (offset.length != 3) {
+			offset = new int[3];
+		}
+
 		return new RegionOptions(
 			tag.getBooleanOr("blocks", true),
 			tag.getBooleanOr("entities", false),
@@ -231,7 +275,8 @@ public final class RegionOptions {
 			strings(tag.getListOrEmpty("rules")),
 			strings(tag.getListOrEmpty("entity_types")),
 			strings(tag.getListOrEmpty("particle_types")),
-			tag.getIntOr("alpha", -1)
+			tag.getIntOr("alpha", -1),
+			offset[0], offset[1], offset[2]
 		);
 	}
 

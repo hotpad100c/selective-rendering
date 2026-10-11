@@ -355,3 +355,24 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 `RegionEditor.refreshAfterRestore` 重建受影响的范围并重算光照。历史最多 64 步，`load()` 后清空。键位在
 `ModConfigs.UNDO_KEY / REDO_KEY`，默认 Ctrl+Z / Ctrl+Y，只在游戏内生效。
 
+---
+
+## 选区投影
+
+`RegionOptions.offset`（x, y, z）是选区的投影位移，全 0 表示没有投影；保存在选区设置里（`offset:[x,y,z]` / `ModConfig.RegionEntry.offsetX/Y/Z`），
+撤销 / 重做自然覆盖。`ProjectionAreas` 缓存当前有位移的范围（随配置快照更新）。
+
+**方块和流体**：不重新烘焙，直接复用区块编译已经算好的四边形（光照、AO、群系染色都和原位置一致）。区块编译时
+（`TerrainTranslucency.begin` 取一份有效范围的快照），Sodium 的 `BlockRendererMixin.bufferQuad` / `DefaultFluidRendererMixin.writeQuad`
+和原版的 `ModelBlockRendererMixin` / `FluidRendererMixin` 发现方块落在某个源范围里，就把四边形（仍是区段内坐标）复制一份给那个范围
+（`TerrainTranslucency.addProjected`），正常的区块 mesh 不受影响。按（范围, 区段）为单位存放，`finish` 时发布。
+`RetainedTerrain` 把每一对当作一个来源，原点是区段原点加位移，和半透明地形共用上传、排序、视锥剔除、绘制；位移变化不需要任何重建，
+只有第一次出现位移时 `RegionEditor.moveProjection` 会让范围内的区段重建一次，让编译开始收集四边形。
+
+**实体、方块实体、粒子**：`ProjectionPass.submit`（在 `submitEntities` 末尾）对每个源范围里的实体和方块实体重新提取渲染状态，
+再按位移提交一遍（实体用 `EntityRenderDispatcher.submit` 的坐标参数，方块实体平移 `PoseStack`）；这期间 `ProjectionPass.active()` 为真，
+选区自己的隐藏 / 半透明 mixin 直接放行。粒子在 `SingleQuadParticleMixin` 里：源范围里的粒子提取完一次后，带着位移再提取一次
+（`extractRotatedQuad` 的坐标加上位移）。被选区隐藏的粒子在创建时就丢弃了，所以不会有投影。
+
+**操作**在 `ProjectionControls`：Ctrl + 方向键（`project_*` 热键）相对视线水平方向移动一格，Ctrl + 滚轮沿视线主轴移动（选中了选区时）。
+`InfoRenderer` 在拿着魔杖时用同色的浅色框出投影区，并把 8 个顶点和原位置的框连线。

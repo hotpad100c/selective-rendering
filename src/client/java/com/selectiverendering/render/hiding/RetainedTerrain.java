@@ -63,9 +63,11 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -91,9 +93,9 @@ public final class RetainedTerrain {
 	});
 
 	private static final List<GpuBuffer> GRAVEYARD = new ArrayList<>();
-	private static final Map<Long, Section> SECTIONS = new HashMap<>();
+	private static final Map<Object, Section> SECTIONS = new HashMap<>();
 	// 后台线程在区块编译完成时就把顶点数据建好放进来，渲染线程只负责上传。
-	private static final Map<Long, Pending> PENDING = new ConcurrentHashMap<>();
+	private static final Map<Object, Pending> PENDING = new ConcurrentHashMap<>();
 
 	private static Frame current;
 	private static SubmitNodeCollector currentStorage; // 当前主画面的提交目标，阴影图等其它提交靠它区分
@@ -143,6 +145,11 @@ public final class RetainedTerrain {
 	private record Pending(List<TerrainTranslucency.Quad> source, Future<List<PieceData>> future) {
 	}
 
+	// 一个要绘制的来源：原版区段截流下来的四边形，或者选区的投影。origin 是世界坐标的最小角，size 是方块数。
+	private record Source(Object key, List<TerrainTranslucency.Quad> quads, Set<TextureAtlasSprite> sprites,
+		double minX, double minY, double minZ, double sizeX, double sizeY, double sizeZ) {
+	}
+
 	private record Placed(BufferPice bufferPice, float x, float y, float z) {
 	}
 
@@ -163,7 +170,7 @@ public final class RetainedTerrain {
 	}
 
 	// 在区块编译线程上调用：不开光影时顶点格式已知，直接把这个区段的顶点数据建好，不用等渲染线程来触发。
-	public static void prebuild(long section, List<TerrainTranslucency.Quad> quads) {
+	public static void prebuild(Object section, List<TerrainTranslucency.Quad> quads) {
 		if (ShaderPackState.active()) {
 			return;
 		}
@@ -199,8 +206,26 @@ public final class RetainedTerrain {
 		}
 
 		Map<Long, List<TerrainTranslucency.Quad>> sections = TerrainTranslucency.sections();
+		Map<String, ProjectionAreas.Active> activeAreas = new HashMap<>();
+		for (ProjectionAreas.Active active : ProjectionAreas.current()) {
+			activeAreas.put(active.key(), active);
+		}
+
+		Map<TerrainTranslucency.ProjectionKey, List<TerrainTranslucency.Quad>> projected = TerrainTranslucency.projected();
+		projected.keySet().removeIf(key -> {
+			if (activeAreas.containsKey(key.area())) {
+				return false;
+			}
+
+			TerrainTranslucency.removeProjected(key);
+			return true;
+		});
+
+		Set<Object> live = new HashSet<>(sections.keySet());
+		live.addAll(projected.keySet());
+
 		SECTIONS.entrySet().removeIf(entry -> {
-			if (sections.containsKey(entry.getKey())) {
+			if (live.contains(entry.getKey())) {
 				return false;
 			}
 
@@ -208,7 +233,7 @@ public final class RetainedTerrain {
 			return true;
 		});
 		PENDING.entrySet().removeIf(entry -> {
-			if (sections.containsKey(entry.getKey())) {
+			if (live.contains(entry.getKey())) {
 				return false;
 			}
 
@@ -216,20 +241,11 @@ public final class RetainedTerrain {
 			return true;
 		});
 
-		if (sections.isEmpty()) {
+		if (live.isEmpty()) {
 			return;
 		}
 
-		List<Placed> placedList = new ArrayList<>();
-		Vec3 position = camera.pos;
-		Frustum frustum = new Frustum(camera.viewRotationMatrix, camera.projectionMatrix);
-		frustum.prepare(position.x, position.y, position.z);
-		double range = (Minecraft.getInstance().options.renderDistance().get() + 1) * 16.0;
-		double rangeSquared = range * range;
-		int budget = REBUILD_QUAD_BUDGET;
-		int uploadBudget = UPLOAD_QUAD_BUDGET;
-		int sortUploads = SORT_UPLOAD_BUDGET;
-		RenderType type = renderType(shaders);
+		List<Source> sources = new ArrayList<>();
 
 		for (Map.Entry<Long, List<TerrainTranslucency.Quad>> entry : sections.entrySet()) {
 			SectionPos section = SectionPos.of(entry.getKey());
@@ -239,25 +255,54 @@ public final class RetainedTerrain {
 				continue;
 			}
 
-			double minX = section.minBlockX();
-			double minY = section.minBlockY();
-			double minZ = section.minBlockZ();
+			sources.add(new Source(entry.getKey(), entry.getValue(), TerrainTranslucency.sprites(entry.getKey()),
+				section.minBlockX(), section.minBlockY(), section.minBlockZ(), 16, 16, 16));
+		}
 
-			double dx = minX + 8.0 - position.x;
-			double dy = minY + 8.0 - position.y;
-			double dz = minZ + 8.0 - position.z;
-			if (dx * dx + dy * dy + dz * dz > rangeSquared) {
+		for (Map.Entry<TerrainTranslucency.ProjectionKey, List<TerrainTranslucency.Quad>> entry : projected.entrySet()) {
+			ProjectionAreas.Active active = activeAreas.get(entry.getKey().area());
+			if (active == null) {
+				continue;
+			}
+
+			// 投影的四边形仍是区段内坐标，投影后的位置就是区段原点加上位移。
+			SectionPos section = SectionPos.of(entry.getKey().section());
+			sources.add(new Source(entry.getKey(), entry.getValue(), TerrainTranslucency.projectedSprites(entry.getKey()),
+				section.minBlockX() + active.offsetX(), section.minBlockY() + active.offsetY(), section.minBlockZ() + active.offsetZ(), 16, 16, 16));
+		}
+
+		List<Placed> placedList = new ArrayList<>();
+		Vec3 position = camera.pos;
+		Frustum frustum = new Frustum(camera.viewRotationMatrix, camera.projectionMatrix);
+		frustum.prepare(position.x, position.y, position.z);
+		double range = (Minecraft.getInstance().options.renderDistance().get() + 1) * 16.0;
+		int budget = REBUILD_QUAD_BUDGET;
+		int uploadBudget = UPLOAD_QUAD_BUDGET;
+		int sortUploads = SORT_UPLOAD_BUDGET;
+		RenderType type = renderType(shaders);
+
+		for (Source source : sources) {
+			double minX = source.minX();
+			double minY = source.minY();
+			double minZ = source.minZ();
+
+			double dx = minX + source.sizeX() / 2.0 - position.x;
+			double dy = minY + source.sizeY() / 2.0 - position.y;
+			double dz = minZ + source.sizeZ() / 2.0 - position.z;
+			double radius = Math.sqrt(source.sizeX() * source.sizeX() + source.sizeY() * source.sizeY() + source.sizeZ() * source.sizeZ()) / 2.0;
+			double limit = range + radius;
+			if (dx * dx + dy * dy + dz * dz > limit * limit) {
 				continue;
 			}
 
 			// 不开光影时视锥外的区段也先上传，转头时才不会因为现建而闪烁。
-			boolean visible = frustum.isVisible(new AABB(minX, minY, minZ, minX + 16, minY + 16, minZ + 16));
+			boolean visible = frustum.isVisible(new AABB(minX, minY, minZ, minX + source.sizeX(), minY + source.sizeY(), minZ + source.sizeZ()));
 			if (!visible && shaders) {
 				continue;
 			}
 
-			List<TerrainTranslucency.Quad> quads = entry.getValue();
-			Section built = SECTIONS.get(entry.getKey());
+			List<TerrainTranslucency.Quad> quads = source.quads();
+			Section built = SECTIONS.get(source.key());
 
 			if (built == null || built.source() != quads) {
 				if (shaders) {
@@ -268,13 +313,13 @@ public final class RetainedTerrain {
 							retire(built);
 						}
 
-						SECTIONS.put(entry.getKey(), rebuilt);
+						SECTIONS.put(source.key(), rebuilt);
 						built = rebuilt;
 						budget -= quads.size();
 					}
 				}
 				else {
-					Pending pending = PENDING.get(entry.getKey());
+					Pending pending = PENDING.get(source.key());
 					if (pending == null || pending.source() != quads) {
 						if (pending != null) {
 							pending.future().cancel(true);
@@ -282,11 +327,11 @@ public final class RetainedTerrain {
 
 						VertexFormat format = type.format();
 						pending = new Pending(quads, POOL.submit(() -> buildData(quads, format)));
-						PENDING.put(entry.getKey(), pending);
+						PENDING.put(source.key(), pending);
 					}
 
 					if (pending.future().isDone() && uploadBudget > 0) {
-						PENDING.remove(entry.getKey());
+						PENDING.remove(source.key());
 
 						try {
 							Section uploaded = upload(quads, pending.future().get());
@@ -294,7 +339,7 @@ public final class RetainedTerrain {
 								retire(built);
 							}
 
-							SECTIONS.put(entry.getKey(), uploaded);
+							SECTIONS.put(source.key(), uploaded);
 							built = uploaded;
 							uploadBudget -= quads.size();
 						}
@@ -322,7 +367,7 @@ public final class RetainedTerrain {
 
 				if (!marked) {
 					marked = true;
-					for (TextureAtlasSprite sprite : TerrainTranslucency.sprites(entry.getKey())) {
+					for (TextureAtlasSprite sprite : source.sprites()) {
 						SodiumSprites.markActive(sprite);
 					}
 				}

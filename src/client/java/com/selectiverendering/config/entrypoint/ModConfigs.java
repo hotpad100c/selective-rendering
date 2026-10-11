@@ -1,5 +1,6 @@
 package com.selectiverendering.config.entrypoint;
 
+import com.selectiverendering.interaction.ProjectionControls;
 import net.minecraft.network.chat.Component;
 import com.selectiverendering.region.RegionHistory;
 import com.selectiverendering.matchingrule.BlockListMessage;
@@ -52,6 +53,10 @@ public final class ModConfigs {
 	public static final ConfigHotkey REGION_KEY = new ConfigHotkey("region_key", "LEFT_CONTROL", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey UNDO_KEY = new ConfigHotkey("undo_key", "LEFT_CONTROL,Z", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigHotkey REDO_KEY = new ConfigHotkey("redo_key", "LEFT_CONTROL,Y", KeybindSettings.DEFAULT).apply(KEY);
+	public static final ConfigHotkey PROJECT_LEFT = new ConfigHotkey("project_left", "LEFT_CONTROL,LEFT", KeybindSettings.DEFAULT).apply(KEY);
+	public static final ConfigHotkey PROJECT_RIGHT = new ConfigHotkey("project_right", "LEFT_CONTROL,RIGHT", KeybindSettings.DEFAULT).apply(KEY);
+	public static final ConfigHotkey PROJECT_FORWARD = new ConfigHotkey("project_forward", "LEFT_CONTROL,UP", KeybindSettings.DEFAULT).apply(KEY);
+	public static final ConfigHotkey PROJECT_BACK = new ConfigHotkey("project_back", "LEFT_CONTROL,DOWN", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigString WAND = new ConfigString("wand", SelectiveRenderingManager.DEFAULT_WAND).apply(KEY);
 	public static final ConfigBoolean FULL_BRIGHT = new ConfigBoolean("full_bright", SelectiveRenderingManager.DEFAULT_FULL_BRIGHT).apply(KEY);
@@ -71,6 +76,10 @@ public final class ModConfigs {
 		REGION_KEY,
 		UNDO_KEY,
 		REDO_KEY,
+		PROJECT_LEFT,
+		PROJECT_RIGHT,
+		PROJECT_FORWARD,
+		PROJECT_BACK,
 		OPEN_CONFIG_GUI,
 		WAND,
 		FULL_BRIGHT,
@@ -82,7 +91,7 @@ public final class ModConfigs {
 		RECORD_KEY
 	);
 
-	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, OPERATION_KEY, RECORD_KEY, UNDO_KEY, REDO_KEY);
+	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, OPERATION_KEY, RECORD_KEY, UNDO_KEY, REDO_KEY, PROJECT_LEFT, PROJECT_RIGHT, PROJECT_FORWARD, PROJECT_BACK);
 	// 仅保存键位；开关值由 manager 保存。
 	private static final List<IHotkey> TOGGLE_LIST = List.of(PASS_THROUGH);
 
@@ -120,6 +129,10 @@ public final class ModConfigs {
 			}
 			return true;
 		});
+		bindProjection(PROJECT_LEFT, ProjectionControls.Move.LEFT);
+		bindProjection(PROJECT_RIGHT, ProjectionControls.Move.RIGHT);
+		bindProjection(PROJECT_FORWARD, ProjectionControls.Move.FORWARD);
+		bindProjection(PROJECT_BACK, ProjectionControls.Move.BACK);
 		UNDO_KEY.getKeybind().setCallback((action, key) -> {
 			if (action == KeyAction.PRESS) {
 				BlockListMessage.note(Component.translatable(SelectiveRendering.MOD_ID + (RegionHistory.undo() ? ".message.undo" : ".message.nothing_to_undo")).getString());
@@ -175,6 +188,10 @@ public final class ModConfigs {
 		if (!syncing) {
 			apply.run();
 		}
+	}
+
+	private static void bindProjection(ConfigHotkey key, ProjectionControls.Move move) {
+		key.getKeybind().setCallback((action, ignored) -> action == KeyAction.PRESS && ProjectionControls.move(move));
 	}
 
 	private static void readHotkeys() {
@@ -270,6 +287,10 @@ public final class ModConfigs {
 			manager.addKeybindToMap(REGION_KEY.getKeybind());
 			manager.addKeybindToMap(OPERATION_KEY.getKeybind());
 			manager.addKeybindToMap(UNDO_KEY.getKeybind());
+			manager.addKeybindToMap(PROJECT_LEFT.getKeybind());
+			manager.addKeybindToMap(PROJECT_RIGHT.getKeybind());
+			manager.addKeybindToMap(PROJECT_FORWARD.getKeybind());
+			manager.addKeybindToMap(PROJECT_BACK.getKeybind());
 			manager.addKeybindToMap(REDO_KEY.getKeybind());
 			manager.addKeybindToMap(PASS_THROUGH.getKeybind());
 		}
@@ -279,7 +300,7 @@ public final class ModConfigs {
 			manager.addHotkeysForCategory(
 				MOD_NAME,
 				SelectiveRendering.MOD_ID + ".hotkeys.category.main",
-				List.<IHotkey>of(RECORD_KEY, REGION_KEY, OPERATION_KEY, UNDO_KEY, REDO_KEY, PASS_THROUGH, OPEN_CONFIG_GUI)
+				List.<IHotkey>of(RECORD_KEY, REGION_KEY, OPERATION_KEY, UNDO_KEY, REDO_KEY, PROJECT_LEFT, PROJECT_RIGHT, PROJECT_FORWARD, PROJECT_BACK, PASS_THROUGH, OPEN_CONFIG_GUI)
 			);
 		}
 	}

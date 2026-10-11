@@ -64,6 +64,11 @@ public final class GuiRegionConfigs extends GuiConfigsBase {
 							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);
 				}
 
+				if (entry.getConfig() instanceof RegionOffsetConfig) {
+					return new WidgetRegionOffset(x, y, this.browserEntryWidth, this.browserEntryHeight,
+							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);
+				}
+
 				if (entry.getConfig() instanceof RegionMergeConfig) {
 					return new WidgetRegionMerge(x, y, this.browserEntryWidth, this.browserEntryHeight,
 							this.maxLabelWidth, this.configWidth, entry, listIndex, this.parent, this);

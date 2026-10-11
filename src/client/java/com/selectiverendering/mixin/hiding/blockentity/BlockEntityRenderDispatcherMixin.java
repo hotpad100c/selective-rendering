@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.blockentity;
 
+import com.selectiverendering.render.hiding.ProjectionPass;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -31,6 +32,11 @@ public class BlockEntityRenderDispatcherMixin {
 		CameraRenderState cameraRenderState,
 		Operation<Void> original
 	) {
+		if (ProjectionPass.active()) {
+			original.call(renderer, renderState, poseStack, collector, cameraRenderState);
+			return;
+		}
+
 		int alpha = AlphaGetter.getAlphaAt(renderState.blockPos);
 		if (alpha == 0) {
 			return;

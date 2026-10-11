@@ -39,6 +39,7 @@ The default wand is a **breeze rod** — hold it in your hand to enable the oper
 | Selection key + right | Clip every stored selection with the current one |
 | Operation key + left  | Add / remove a block or entity (to the selected region's local list if any) |
 | Operation key + right | Block with states / item entity by item       |
+| Ctrl + arrows / Ctrl + scroll (region selected) | Move the region's projection |
 | Ctrl + Z / Ctrl + Y   | Undo / redo selection add, remove and property edits |
 | Left Ctrl + scroll    | Cycle modes                                   |
 | Left Alt + scroll     | Move the currently selected corner            |

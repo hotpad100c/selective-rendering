@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.render;
 
+import com.selectiverendering.render.hiding.ProjectionPass;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.selectiverendering.render.hiding.RetainedTerrain;
 import com.selectiverendering.render.information.InfoRenderer;
@@ -36,6 +37,7 @@ public class LevelRendererMixin {
 		ClientLevel level = Minecraft.getInstance().level;
 		if (level != null) {
 			RetainedTerrain.prepare(level, levelRenderState.cameraRenderState, output);
+			ProjectionPass.submit(level, poseStack, levelRenderState, output);
 		}
 	}
 

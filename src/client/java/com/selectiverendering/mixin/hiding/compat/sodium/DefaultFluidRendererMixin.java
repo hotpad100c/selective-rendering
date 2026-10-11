@@ -144,11 +144,24 @@ public class DefaultFluidRendererMixin {
 		cancellable = true
 	)
 	private void selectiveRendering$captureQuad(ChunkModelBuilder builder, TranslucentGeometryCollector collector, Material material, BlockPos pos, ModelQuadView quad, ModelQuadFacing facing, boolean shade, CallbackInfo ci) {
+		BlockPos world = selectiveRendering$pos;
+		if (world != null && TerrainTranslucency.projecting(world)) {
+			TerrainTranslucency.addProjected(world, this.selectiveRendering$buildQuad(quad, 255, false));
+			TerrainTranslucency.addSprite(quad.getSprite());
+		}
+
 		int alpha = selectiveRendering$alpha;
 		if (alpha < 0 || alpha >= 255 || !TerrainTranslucency.capturing() || (alpha == 0 && !SelectiveRenderingManager.isBuildHiddenMesh())) {
 			return;
 		}
 
+		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, alpha, true));
+		TerrainTranslucency.addSprite(quad.getSprite());
+		ci.cancel();
+	}
+
+	@Unique
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(ModelQuadView quad, int alpha, boolean capture) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
@@ -174,9 +187,7 @@ public class DefaultFluidRendererMixin {
 		}
 
 		int packedNormal = quad.getFaceNormal();
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, alpha == SelectiveRenderingManager.config().alpha()));
-		TerrainTranslucency.addSprite(quad.getSprite());
-		ci.cancel();
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

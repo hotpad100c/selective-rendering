@@ -41,12 +41,17 @@ public class BlockRendererMixin {
 	@Unique
 	private static final float CAPTURE_INSET = 0.005F;
 
+	/** 当前正在渲染的方块的世界坐标，用来判断它在不在投影范围里。 */
+	@Unique
+	private BlockPos selectiveRendering$pos;
+
 	@WrapMethod(method = "renderModel")
 	private void selectiveRendering$renderModel(BlockStateModel model, BlockState state, BlockPos pos, BlockPos origin, Operation<Void> original) {
 		BlockRenderContextAccess context = this.selectiveRendering$context();
 		int alpha = AlphaGetter.getAlpha(state, pos);
 
 		context.selectiveRendering$setAlpha(alpha);
+		this.selectiveRendering$pos = pos;
 
 		try {
 			if (alpha != 0 || (TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
@@ -70,6 +75,11 @@ public class BlockRendererMixin {
 
 	@Inject(method = "bufferQuad", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onBufferQuad(MutableQuadViewImpl quad, float[] brightnesses, Material material, CallbackInfo ci) {
+		if (this.selectiveRendering$pos != null && TerrainTranslucency.projecting(this.selectiveRendering$pos)) {
+			TerrainTranslucency.addProjected(this.selectiveRendering$pos, this.selectiveRendering$buildQuad(quad, brightnesses, 255, false));
+			TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
+		}
+
 		int alpha = this.selectiveRendering$alpha();
 		if (alpha < 0 || alpha >= 255) {
 			return;
@@ -107,15 +117,20 @@ public class BlockRendererMixin {
 	/** 光影包下地形没法半透明：四边形不进区块 mesh，改存起来由实体管线绘制。 */
 	@Unique
 	private void selectiveRendering$capture(MutableQuadViewImpl quad, float[] brightnesses, int alpha) {
+		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
+		TerrainTranslucency.add(this.selectiveRendering$buildQuad(quad, brightnesses, alpha, true));
+	}
+
+	/** 把 Sodium 的一个四边形转成区段内坐标的四边形；capture 为真时边界面向内收，透明度跟随全局。 */
+	@Unique
+	private TerrainTranslucency.Quad selectiveRendering$buildQuad(MutableQuadViewImpl quad, float[] brightnesses, int alpha, boolean capture) {
 		float[] positions = new float[12];
 		float[] uvs = new float[8];
 		int[] colors = new int[4];
 		int[] lights = new int[4];
 
-		TerrainTranslucency.addSprite(quad.sprite(SpriteFinderCache.forBlockAtlas()));
-
 		Vector3f normal = quad.faceNormal();
-		float inset = quad.getCullFace() == null ? 0.0F : CAPTURE_INSET;
+		float inset = capture && quad.getCullFace() != null ? CAPTURE_INSET : 0.0F;
 
 		for (int i = 0; i < 4; i++) {
 			int source = ModelQuadOrientation.NORMAL.getVertexIndex(i);
@@ -137,7 +152,7 @@ public class BlockRendererMixin {
 			lights[i] = quad.getLight(source);
 		}
 
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, alpha == SelectiveRenderingManager.config().alpha()));
+		return new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, capture && alpha == SelectiveRenderingManager.config().alpha());
 	}
 
 	@Unique

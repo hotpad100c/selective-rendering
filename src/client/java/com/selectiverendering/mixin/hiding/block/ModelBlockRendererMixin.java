@@ -39,6 +39,10 @@ public class ModelBlockRendererMixin {
 	@Unique
 	private static final ThreadLocal<Integer> selectiveRendering$blockAlpha = ThreadLocal.withInitial(() -> -1);
 
+	/** 当前线程正在渲染的方块的世界坐标。 */
+	@Unique
+	private static final ThreadLocal<BlockPos> selectiveRendering$blockPos = new ThreadLocal<>();
+
 	@Shadow
 	@Final
 	private QuadInstance quadInstance;
@@ -57,6 +61,7 @@ public class ModelBlockRendererMixin {
 		CallbackInfo ci
 	) {
 		selectiveRendering$blockAlpha.set(MovingBlockRenderContext.alpha() != -1 ? -1 : AlphaGetter.getAlpha(blockState, pos));
+		selectiveRendering$blockPos.set(pos.immutable());
 	}
 
 	@Inject(method = "tesselateBlock", at = @At("TAIL"), require = 1)
@@ -138,6 +143,12 @@ public class ModelBlockRendererMixin {
 		if (MovingBlockRenderContext.alpha() != -1) {
 			original.call(output, x, y, z, quad, instance);
 			return;
+		}
+
+		BlockPos blockPos = selectiveRendering$blockPos.get();
+		if (blockPos != null && TerrainTranslucency.projecting(blockPos)) {
+			TerrainTranslucency.addProjected(blockPos, VanillaCapture.toQuad(x, y, z, quad, instance, 255, false));
+			TerrainTranslucency.addSprite(quad.materialInfo().sprite());
 		}
 
 		int alpha = selectiveRendering$blockAlpha.get();

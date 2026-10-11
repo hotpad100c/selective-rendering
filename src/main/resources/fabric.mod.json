@@ -5,8 +5,9 @@
 	"name": "Selective Rendering",
 	"description": "A client-side mod that makes any block translucent or hides it, based on \"region + block list\"",
 	"authors": [
-		"Ryan100c (port²er, original author)",
-		"wlm3201 (original porter)"
+		"Ryan100c (original author)",
+		"wlm3201 (original porter)",
+		"Ryan100C (port fork author)"
 	],
 	"license": "CC-BY-NC-4.0",
 	"icon": "assets/selective_rendering/icon.png",
