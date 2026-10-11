@@ -76,6 +76,9 @@ import java.util.concurrent.Future;
 
 public final class RetainedTerrain {
 	private static final int REBUILD_QUAD_BUDGET = 4096;
+	// 小的变化（比如活塞推动一个方块）在本帧内同步完成：重算光照、建缓冲、排序，不让它经过后台线程多帧才出现。
+	private static final int FAST_QUADS = 3000;
+	private static final int SYNC_SORT_BUDGET = 16384;
 	private static final int VERTEX_STRIDE = 48;
 	private static final float DEPTH_PUSH = 1.0005F;
 	// 相机移动多远（平方）后需要重排。
@@ -362,14 +365,14 @@ public final class RetainedTerrain {
 		}
 
 		for (Map.Entry<TerrainTranslucency.ProjectionKey, List<TerrainTranslucency.Quad>> entry : projected.entrySet()) {
-			ProjectionAreas.Active active = activeAreas.get(entry.getKey().area());
-			if (active == null) {
+			ProjectionAreas.Active area = activeAreas.get(entry.getKey().area());
+			if (area == null) {
 				continue;
 			}
 
 			// 投影的四边形仍是区段内坐标，投影后的位置就是区段原点加上位移；光照按投影自己的光照场重算。
-			ProjectionLight.Field field = ProjectionLight.field(level, active);
-			if (field == null) {
+			ProjectionLight.Field usedField = ProjectionLight.field(level, area);
+			if (usedField == null) {
 				continue;
 			}
 
@@ -389,15 +392,19 @@ public final class RetainedTerrain {
 				lit.job = null;
 			}
 
-			if (lit.job == null && (lit.quads == null || lit.source != entry.getValue() || lit.fieldVersion != field.version)) {
+			if (lit.job == null && lit.source != entry.getValue() && entry.getValue().size() <= FAST_QUADS) {
+				lit.quads = ProjectionLight.relight(entry.getValue(), section.minBlockX(), section.minBlockY(), section.minBlockZ(), area.area(), usedField);
+				lit.source = entry.getValue();
+				lit.fieldVersion = usedField.version;
+			}
+
+			if (lit.job == null && (lit.quads == null || lit.source != entry.getValue() || lit.fieldVersion != usedField.version)) {
 				List<TerrainTranslucency.Quad> source = entry.getValue();
 				List<TerrainTranslucency.Quad> previous = lit.quads;
 				boolean sameSource = lit.source == source;
-				ProjectionAreas.Active area = active;
-				ProjectionLight.Field usedField = field;
 
-				lit.jobSource = source;
-				lit.jobVersion = field.version;
+                lit.jobSource = source;
+				lit.jobVersion = usedField.version;
 				lit.job = POOL.submit(() -> {
 					List<TerrainTranslucency.Quad> relit = ProjectionLight.relight(source, section.minBlockX(), section.minBlockY(), section.minBlockZ(), area.area(), usedField);
 
@@ -411,7 +418,7 @@ public final class RetainedTerrain {
 			}
 
 			sources.add(new Source(entry.getKey(), lit.quads, TerrainTranslucency.projectedSprites(entry.getKey()),
-				section.minBlockX() + active.offsetX(), section.minBlockY() + active.offsetY(), section.minBlockZ() + active.offsetZ(), 16, 16, 16));
+				section.minBlockX() + area.offsetX(), section.minBlockY() + area.offsetY(), section.minBlockZ() + area.offsetZ(), 16, 16, 16));
 		}
 
 		LIT.keySet().retainAll(projected.keySet());
@@ -424,6 +431,7 @@ public final class RetainedTerrain {
 		int budget = REBUILD_QUAD_BUDGET;
 		int uploadBudget = UPLOAD_QUAD_BUDGET;
 		int sortUploads = SORT_UPLOAD_BUDGET;
+		int syncSortBudget = SYNC_SORT_BUDGET;
 		RenderType type = renderType(shaders);
 
 		for (Source source : sources) {
@@ -450,8 +458,9 @@ public final class RetainedTerrain {
 			Section built = SECTIONS.get(source.key());
 
 			if (built == null || built.source() != quads) {
-				if (shaders) {
-					// Iris 的扩展顶点格式只有此时在渲染线程才能写对，只能同步构建。
+				if (shaders || (quads.size() <= FAST_QUADS && budget > 0)) {
+					// 开着光影时 Iris 的扩展顶点格式只有此时在渲染线程才能写，同步构建；
+					// 不开光影时，小的变化也同步构建。
 					if (budget > 0) {
 						Section rebuilt = build(quads, type);
 						replace(source.key(), built, rebuilt);
@@ -528,7 +537,11 @@ public final class RetainedTerrain {
 					float moveY = localY - piece.sortY;
 					float moveZ = localZ - piece.sortZ;
 
-					if (piece.sortJob == null && (piece.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
+					if (piece.sortJob == null && piece.indexBuffer == null && piece.indexCount / 6 <= FAST_QUADS && syncSortBudget > 0) {
+						syncSortBudget -= piece.indexCount / 6;
+						sortNow(piece, localX, localY, localZ);
+					}
+					else if (piece.sortJob == null && (piece.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
 						startSort(piece, localX, localY, localZ);
 					}
 				}
@@ -744,39 +757,51 @@ public final class RetainedTerrain {
 		piece.jobX = cameraX;
 		piece.jobY = cameraY;
 		piece.jobZ = cameraZ;
-		piece.sortJob = POOL.submit(() -> {
-			long[] keys = new long[count];
+		piece.sortJob = POOL.submit(() -> computeIndices(centroids, count, cameraX, cameraY, cameraZ));
+	}
 
-			for (int i = 0; i < count; i++) {
-				float dx = centroids[i * 3] - cameraX;
-				float dy = centroids[i * 3 + 1] - cameraY;
-				float dz = centroids[i * 3 + 2] - cameraZ;
-				float distance = dx * dx + dy * dy + dz * dz;
-				keys[i] = ((long) Float.floatToIntBits(distance) << 32) | i;
-			}
+	// 按到相机的距离从远到近排序，生成索引数据
+	private static ByteBuffer computeIndices(float[] centroids, int count, float cameraX, float cameraY, float cameraZ) {
+		long[] keys = new long[count];
 
-			Arrays.sort(keys);
+		for (int i = 0; i < count; i++) {
+			float dx = centroids[i * 3] - cameraX;
+			float dy = centroids[i * 3 + 1] - cameraY;
+			float dz = centroids[i * 3 + 2] - cameraZ;
+			float distance = dx * dx + dy * dy + dz * dz;
+			keys[i] = ((long) Float.floatToIntBits(distance) << 32) | i;
+		}
 
-			boolean wide = count * 4 > 65535;
-			ByteBuffer data = ByteBuffer.allocateDirect(count * 6 * (wide ? 4 : 2)).order(ByteOrder.nativeOrder());
+		Arrays.sort(keys);
 
-			for (int k = count - 1; k >= 0; k--) {
-				int base = (int) (keys[k] & 0xFFFFFFFFL) * 4;
-				int[] pattern = {base, base + 1, base + 2, base + 2, base + 3, base};
+		boolean wide = count * 4 > 65535;
+		ByteBuffer data = ByteBuffer.allocateDirect(count * 6 * (wide ? 4 : 2)).order(ByteOrder.nativeOrder());
 
-				for (int index : pattern) {
-					if (wide) {
-						data.putInt(index);
-					}
-					else {
-						data.putShort((short) index);
-					}
+		for (int k = count - 1; k >= 0; k--) {
+			int base = (int) (keys[k] & 0xFFFFFFFFL) * 4;
+			int[] pattern = {base, base + 1, base + 2, base + 2, base + 3, base};
+
+			for (int index : pattern) {
+				if (wide) {
+					data.putInt(index);
+				}
+				else {
+					data.putShort((short) index);
 				}
 			}
+		}
 
-			data.flip();
-			return data;
-		});
+		data.flip();
+		return data;
+	}
+
+	// 小的块第一次排序可以直接在渲染线程上进行？
+	private static void sortNow(BufferPice piece, float cameraX, float cameraY, float cameraZ) {
+		piece.jobX = cameraX;
+		piece.jobY = cameraY;
+		piece.jobZ = cameraZ;
+		piece.sortJob = CompletableFuture.completedFuture(computeIndices(piece.centroids, piece.indexCount / 6, cameraX, cameraY, cameraZ));
+		uploadSort(piece);
 	}
 
 	// 渲染线程落实后台排好的索引：第一次创建缓冲，之后原地写入。
