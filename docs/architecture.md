@@ -312,3 +312,14 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 加入或移出名单。选中了选区就写入该选区的本地名单（`RegionEditor.toggleLocalRule / toggleLocalEntityType`），否则方块写入全局名单；
 实体没有全局名单，未选中选区时只提示。右键：方块带完整状态，物品实体带 `{Item:{id:..}}`。消息和 HUD 提示都带括号标出写入的名单。
 
+---
+
+## 光影下的地形半透明
+
+光影包把地形顶点 alpha 当作环境光遮蔽，地形没法靠顶点 alpha 半透明。开着光影（`ShaderPackState`，经 Iris API 反射判断）时，
+`BlockRendererMixin.bufferQuad` 对半透明方块的四边形不再写入 Sodium 的区块 mesh，而是交给 `TerrainTranslucency.add`，
+按区段保存（`ChunkBuilderMeshingTaskMixin` 在编译任务开始 / 结束时 begin / finish，重建后整段替换）。
+`LevelRendererMixin` 在 `submitEntities` 末尾调用 `TerrainTranslucency.emit`，用 `RenderTypes.entityTranslucent(方块图集)`
+的自定义几何提交，实体着色器认顶点 alpha。目前只有 Sodium 路径；光照取每顶点的原始光照并乘上 Sodium 算好的亮度，
+没有排序，流体不在内。
+

@@ -3,6 +3,7 @@ package com.selectiverendering.mixin.hiding.compat.sodium;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.selectiverendering.render.hiding.AlphaGetter;
+import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.selectiverendering.util.BlockPosScratch;
 import net.caffeinemc.mods.sodium.client.render.chunk.compile.ChunkBuildContext;
 import net.caffeinemc.mods.sodium.client.render.chunk.compile.ChunkBuildOutput;
@@ -39,6 +40,17 @@ public class ChunkBuilderMeshingTaskMixin {
 	)
 	private void selectiveRendering$beginExecute(ChunkBuildContext buildContext, CancellationToken cancellationToken, CallbackInfoReturnable<ChunkBuildOutput> cir) {
 		selectiveRendering$slice.set(buildContext.cache.getWorldSlice());
+		TerrainTranslucency.begin(renderContext.getOrigin().asLong());
+	}
+
+	@Inject(
+		method = "execute(Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildContext;Lnet/caffeinemc/mods/sodium/client/util/task/CancellationToken;)Lnet/caffeinemc/mods/sodium/client/render/chunk/compile/ChunkBuildOutput;",
+		at = @At("RETURN"),
+		remap = false,
+		require = 1
+	)
+	private void selectiveRendering$endExecute(ChunkBuildContext buildContext, CancellationToken cancellationToken, CallbackInfoReturnable<ChunkBuildOutput> cir) {
+		TerrainTranslucency.finish(cir.getReturnValue() != null);
 	}
 
 	@WrapOperation(

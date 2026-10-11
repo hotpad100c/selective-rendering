@@ -39,7 +39,7 @@ val versionDeps = mapOf(
 	"26.3" to McDeps(
 		fabricApi = "0.161.0+26.3",
 		fabricRendererApi = "17.0.15+79385d0b5d",
-		malilib = "0.30.1",
+		malilib = "0.30.2",
 		modmenu = "21.0.0",
 		sodium = "mc26.3-0.9.2-fabric",
 		minecraftDependency = "~26.3",

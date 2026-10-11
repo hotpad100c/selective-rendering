@@ -1,6 +1,12 @@
 package com.selectiverendering.mixin.render;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.selectiverendering.render.information.InfoRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.gizmos.Gizmos;
 import org.spongepowered.asm.mixin.Mixin;
@@ -24,6 +30,14 @@ public class LevelRendererMixin {
 		InfoRenderer.emit();
 	}
 	*///?}
+
+	@Inject(method = "submitEntities", at = @At("TAIL"))
+	private void selectiveRendering$submitTerrainTranslucency(PoseStack poseStack, LevelRenderState levelRenderState, SubmitNodeCollector collector, CallbackInfo ci) {
+		ClientLevel level = Minecraft.getInstance().level;
+		if (level != null) {
+			TerrainTranslucency.emit(poseStack, collector, level, levelRenderState.cameraRenderState.pos, levelRenderState.cameraRenderState.cullFrustum);
+		}
+	}
 
 	@Inject(method = "finalizeGizmoCollection", at = @At("TAIL"), require = 0)
 	private void selectiveRendering$markGizmosDrained(CallbackInfo ci) {

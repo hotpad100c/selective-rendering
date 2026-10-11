@@ -12,6 +12,9 @@
 	"icon": "assets/selective_rendering/icon.png",
 	"environment": "client",
 	"entrypoints": {
+		"preLaunch": [
+			"com.selectiverendering.dev.DevPreLaunch"
+		],
 		"client": [
 			"com.selectiverendering.SelectiveRendering"
 		],
