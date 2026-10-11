@@ -39,7 +39,7 @@ src/
     │   ├── RegionEditor.java            魔杖双角点 + 选区的增/删/裁/点选
     │   ├── RegionMerger.java            散点坐标 → 长方体（贪心合并）
     │   ├── CameraRay.java               ★ 魔杖射线：从渲染相机出发、穿过鼠标指针
-    │   └── WandHud.java                 手持魔杖时的 HUD（由 GuiMixin 转发调用）
+    │   └── （HUD 在 render/information/WandHudRenderer：左下角的模式图标、选区状态、带图标的操作提示）
     ├── matchingrule/                    方块名单规则
     │   ├── BlockMatchRule.java          规则字符串的解析与匹配
     │   └── BlockListMessage.java        增删规则时屏幕下方的浮动提示
@@ -75,7 +75,7 @@ src/
         ├── region/
         │   ├── MouseHandlerMixin        ★ 魔杖的全部鼠标交互
         │   ├── LevelRendererMixin       选区线框（双注入点，兼容方法改名）
-        │   └── GuiMixin                 HUD 注入点（→ WandHud）
+        │   └── GuiMixin                 HUD 注入点（→ WandHudRenderer）
         ├── interaction/ClientLevelClipMixin  ★ 客户端射线：淡化方块当空气（见第六节）
         ├── recording/ClientLevelMixin   给记录器喂方块变化
         └── compat/                      第三方 Mod 补丁：sodium/、indigo/（Fabric Renderer API）、entityCulling/、ImmediatelyFast/
@@ -175,13 +175,13 @@ synchronized (LOCK) {
 | `mixin/blockentity/BlockFeatureRendererMixin.java` | 26.1.2 打 `BlockFeatureRenderer.renderMovingBlockSubmits`；26.2+ 打 `MovingBlockFeatureRenderer.buildGroup`。目标类和注入策略都不是一回事。 |
 | `mixin/blockentity/RenderTypeFeatureRendererMixin`<br>`mixin/blockentity/BufferSourceMixin`<br>`mixin/compat/ImmediatelyFastBufferSourceMixin` | 三个"取 VertexConsumer"的入口各自依赖**只在部分版本存在**的类：`MultiBufferSource` 26.3 已删除；`RenderTypeFeatureRenderer` 26.2+ 才有。整文件包进条件里，不满足的版本是空文件。 |
 | `mixin/blockentity/FeatureRenderDispatcherMixin` | 差异不只是方法名，**返回类型也不同**：26.1.2 `endFrame` 返回 `void`，26.2+ `prepareFrame` 返回 `PreparedFrame`（26.1.2 里没有这个类）。 |
-| `mixin/region/GuiMixin` | 26.1.2 打 `Gui`，26.2+ 打 `Hud`（26.1.2 里没有这个类）；正文在共享的 `WandHud`。 |
+| `mixin/region/GuiMixin` | 26.1.2 打 `Gui`，26.2+ 打 `Hud`（26.1.2 里没有这个类）；正文在共享的 `WandHudRenderer`。 |
 
 ### 已经在共享里的"跨版本"技巧
 
 - **`LevelRendererMixin`**：方法改名过（`collectPerFrameGizmos` → `collectPerFrameRenderThreadGizmos`），
   参数签名相同，于是写两个 `require = 0` 的 `@Inject` 委托给同一个 `emit()`。
-- **`WandHud`**：HUD 正文各版本相同，只有 mixin 目标类不同（26.1.2 是 `Gui`，26.2+ 是 `Hud`）。
+- **`WandHudRenderer`**：HUD 正文各版本相同，只有 mixin 目标类不同（26.1.2 是 `Gui`，26.2+ 是 `Hud`）。
   正文抽到共享类，`GuiMixin` 只剩转发和一个按版本切换的 `@Mixin` 目标。
 - **可选依赖的 mixin**（Sodium / Indigo / ImmediatelyFast）统一用
   `require = 0` + `remap = false` + 字符串 `targets`，缺席时静默跳过。
@@ -294,3 +294,12 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 落盘由 `ModConfig.save()` 防抖异步完成。
 
 ---
+
+---
+
+## HUD 图标
+
+手持魔杖时 `WandHudRenderer` 在左下角从上到下画：渲染模式图标 + 名称（反转时标注）、选中的选区（颜色块、序号、范围数、
+已启用的方块 / 实体 / 粒子图标）、角点和记录状态文字、带图标的操作提示（鼠标左 / 中 / 右键、滚轮、热键图标，
+按住选区键或方块键时只列对应的组合）。图标在 `assets/selective_rendering/textures/gui/`，都是 32×32，
+用 `GuiGraphicsExtractor.blit` 带缩放的重载画成需要的大小；模式到图标的对应关系在 `WandHudRenderer.modeIcon`。
