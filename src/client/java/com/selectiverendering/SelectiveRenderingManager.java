@@ -1,5 +1,6 @@
 package com.selectiverendering;
 
+import com.selectiverendering.region.RegionHistory;
 import com.selectiverendering.render.hiding.RetainedTerrain;
 import com.selectiverendering.config.entrypoint.ModConfig;
 import com.selectiverendering.config.presets.Preset;
@@ -292,6 +293,7 @@ public final class SelectiveRenderingManager {
 
 			publish();
 			rememberSources();
+			RegionHistory.reset();
 		}
 
 		Log.debug("[state] loaded: mode {}, transparency {}%, {} rule(s), {} region(s), {} preset(s)", mode, transparency, RULES.size(), REGIONS.size(), PRESETS.size());
@@ -822,6 +824,7 @@ public final class SelectiveRenderingManager {
 		publish();
 		rememberSources();
 		persist();
+		RegionHistory.record();
 	}
 
 	/** 发布新的配置快照并使判定缓存失效；调用方须持有 LOCK。 */

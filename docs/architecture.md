@@ -345,3 +345,13 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 配置 `build_hidden_mesh`（默认关）开启后，alpha 为 0 的方块 / 流体也截流（绘制时跳过），
 全局透明度在完全隐藏和半透明之间变化时不重建区块。
 
+---
+
+## 选区撤销 / 重做
+
+`RegionHistory` 在 `SelectiveRenderingManager.commitAndRemember` 里记录：每次提交前后各比一次选区列表，`Region` 不可变，
+所以逐个比较对象是否是同一个就知道有没有变化；有变化就把变化前的快照（选区列表加选中的选区 id）压进撤销栈，并清空重做栈。
+同一个选区在 1.2 秒内连续被原地修改（拖拉条）合并成一步。撤销 / 重做把快照写回 `REGIONS`，保存，再由
+`RegionEditor.refreshAfterRestore` 重建受影响的范围并重算光照。历史最多 64 步，`load()` 后清空。键位在
+`ModConfigs.UNDO_KEY / REDO_KEY`，默认 Ctrl+Z / Ctrl+Y，只在游戏内生效。
+

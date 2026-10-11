@@ -461,6 +461,15 @@ public final class RegionEditor {
 		return true;
 	}
 
+	/** 撤销 / 重做后整体刷新 */
+	static void refreshAfterRestore(List<Region> before, List<Region> after) {
+		List<Area> areas = new ArrayList<>();
+		before.forEach(region -> areas.addAll(region.areas()));
+		after.forEach(region -> areas.addAll(region.areas()));
+
+		changed(areas, areas, true);
+	}
+
 	private static void dropSelectionIfGone() {
 		java.util.UUID id = SelectiveRenderingManager.selectedRegionId;
 
@@ -470,7 +479,7 @@ public final class RegionEditor {
 	}
 
 	/** 受影响的范围重建，被移走的范围还原光照；fullRebuild 时整体重建。 */
-	private static void changed(List<Area> touched, List<Area> retired, boolean fullRebuild) {
+	static void changed(List<Area> touched, List<Area> retired, boolean fullRebuild) {
 		if (!SelectiveRenderingManager.getMode().usesRegion()) {
 			return;
 		}

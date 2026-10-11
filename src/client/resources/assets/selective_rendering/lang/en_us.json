@@ -114,5 +114,15 @@
   "selective_rendering.message.select_region_first": "Entities only have region lists: middle click a region first",
   "selective_rendering.config.name.build_hidden_mesh": "Build mesh when hidden",
   "selective_rendering.config.prettyName.build_hidden_mesh": "Build mesh when hidden",
-  "selective_rendering.config.comment.build_hidden_mesh": "Keep building the mesh of fully hidden blocks and just skip drawing it, so switching between hidden and translucent never rebuilds chunks. Costs some memory"
+  "selective_rendering.config.comment.build_hidden_mesh": "Keep building the mesh of fully hidden blocks and just skip drawing it, so switching between hidden and translucent never rebuilds chunks. Costs some memory",
+  "selective_rendering.config.name.undo_key": "Undo selection change",
+  "selective_rendering.config.prettyName.undo_key": "Undo selection change",
+  "selective_rendering.config.comment.undo_key": "Undo the last selection change: add, remove, clip, merge or property edit",
+  "selective_rendering.config.name.redo_key": "Redo selection change",
+  "selective_rendering.config.prettyName.redo_key": "Redo selection change",
+  "selective_rendering.config.comment.redo_key": "Redo what was just undone",
+  "selective_rendering.message.undo": "Undone",
+  "selective_rendering.message.redo": "Redone",
+  "selective_rendering.message.nothing_to_undo": "Nothing to undo",
+  "selective_rendering.message.nothing_to_redo": "Nothing to redo"
 }

@@ -114,5 +114,15 @@
   "selective_rendering.message.select_region_first": "实体只有选区名单：请先用中键选中一个选区",
   "selective_rendering.config.name.build_hidden_mesh": "隐藏时仍构建网格",
   "selective_rendering.config.prettyName.build_hidden_mesh": "隐藏时仍构建网格",
-  "selective_rendering.config.comment.build_hidden_mesh": "完全隐藏的方块仍然构建网格，只是不绘制，这样在隐藏和半透明之间切换不需要重建区块。会多占一些内存"
+  "selective_rendering.config.comment.build_hidden_mesh": "完全隐藏的方块仍然构建网格，只是不绘制，这样在隐藏和半透明之间切换不需要重建区块。会多占一些内存",
+  "selective_rendering.config.name.undo_key": "撤销选区修改",
+  "selective_rendering.config.prettyName.undo_key": "撤销选区修改",
+  "selective_rendering.config.comment.undo_key": "撤销上一次选区修改：添加、删除、裁剪、合并或属性修改",
+  "selective_rendering.config.name.redo_key": "重做选区修改",
+  "selective_rendering.config.prettyName.redo_key": "重做选区修改",
+  "selective_rendering.config.comment.redo_key": "重做刚刚撤销的修改",
+  "selective_rendering.message.undo": "已撤销",
+  "selective_rendering.message.redo": "已重做",
+  "selective_rendering.message.nothing_to_undo": "没有可撤销的操作",
+  "selective_rendering.message.nothing_to_redo": "没有可重做的操作"
 }

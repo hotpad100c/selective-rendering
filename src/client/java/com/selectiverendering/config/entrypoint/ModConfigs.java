@@ -1,5 +1,8 @@
 package com.selectiverendering.config.entrypoint;
 
+import net.minecraft.network.chat.Component;
+import com.selectiverendering.region.RegionHistory;
+import com.selectiverendering.matchingrule.BlockListMessage;
 import com.google.gson.JsonObject;
 import com.selectiverendering.SelectiveRendering;
 import com.selectiverendering.SelectiveRenderingManager;
@@ -47,6 +50,8 @@ public final class ModConfigs {
 	public static final SuggestingStringList RULES = new SuggestingStringList("items", SuggestKind.BLOCK).apply(KEY);
 	public static final ConfigHotkey OPERATION_KEY = new ConfigHotkey("operation_key", "LEFT_ALT", KeybindSettings.MODIFIER_INGAME).apply(KEY);
 	public static final ConfigHotkey REGION_KEY = new ConfigHotkey("region_key", "LEFT_CONTROL", KeybindSettings.MODIFIER_INGAME).apply(KEY);
+	public static final ConfigHotkey UNDO_KEY = new ConfigHotkey("undo_key", "LEFT_CONTROL,Z", KeybindSettings.DEFAULT).apply(KEY);
+	public static final ConfigHotkey REDO_KEY = new ConfigHotkey("redo_key", "LEFT_CONTROL,Y", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigString WAND = new ConfigString("wand", SelectiveRenderingManager.DEFAULT_WAND).apply(KEY);
 	public static final ConfigBoolean FULL_BRIGHT = new ConfigBoolean("full_bright", SelectiveRenderingManager.DEFAULT_FULL_BRIGHT).apply(KEY);
@@ -64,6 +69,8 @@ public final class ModConfigs {
 		RULES,
 		OPERATION_KEY,
 		REGION_KEY,
+		UNDO_KEY,
+		REDO_KEY,
 		OPEN_CONFIG_GUI,
 		WAND,
 		FULL_BRIGHT,
@@ -75,7 +82,7 @@ public final class ModConfigs {
 		RECORD_KEY
 	);
 
-	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, OPERATION_KEY, RECORD_KEY);
+	private static final List<ConfigHotkey> HOTKEY_LIST = List.of(OPEN_CONFIG_GUI, REGION_KEY, OPERATION_KEY, RECORD_KEY, UNDO_KEY, REDO_KEY);
 	// 仅保存键位；开关值由 manager 保存。
 	private static final List<IHotkey> TOGGLE_LIST = List.of(PASS_THROUGH);
 
@@ -110,6 +117,18 @@ public final class ModConfigs {
 		OPEN_CONFIG_GUI.getKeybind().setCallback((action, key) -> {
 			if (action == KeyAction.PRESS) {
 				ModConfigScreen.open(Minecraft.getInstance());
+			}
+			return true;
+		});
+		UNDO_KEY.getKeybind().setCallback((action, key) -> {
+			if (action == KeyAction.PRESS) {
+				BlockListMessage.note(Component.translatable(SelectiveRendering.MOD_ID + (RegionHistory.undo() ? ".message.undo" : ".message.nothing_to_undo")).getString());
+			}
+			return true;
+		});
+		REDO_KEY.getKeybind().setCallback((action, key) -> {
+			if (action == KeyAction.PRESS) {
+				BlockListMessage.note(Component.translatable(SelectiveRendering.MOD_ID + (RegionHistory.redo() ? ".message.redo" : ".message.nothing_to_redo")).getString());
 			}
 			return true;
 		});
@@ -250,6 +269,8 @@ public final class ModConfigs {
 			manager.addKeybindToMap(RECORD_KEY.getKeybind());
 			manager.addKeybindToMap(REGION_KEY.getKeybind());
 			manager.addKeybindToMap(OPERATION_KEY.getKeybind());
+			manager.addKeybindToMap(UNDO_KEY.getKeybind());
+			manager.addKeybindToMap(REDO_KEY.getKeybind());
 			manager.addKeybindToMap(PASS_THROUGH.getKeybind());
 		}
 
@@ -258,7 +279,7 @@ public final class ModConfigs {
 			manager.addHotkeysForCategory(
 				MOD_NAME,
 				SelectiveRendering.MOD_ID + ".hotkeys.category.main",
-				List.<IHotkey>of(RECORD_KEY, REGION_KEY, OPERATION_KEY, PASS_THROUGH, OPEN_CONFIG_GUI)
+				List.<IHotkey>of(RECORD_KEY, REGION_KEY, OPERATION_KEY, UNDO_KEY, REDO_KEY, PASS_THROUGH, OPEN_CONFIG_GUI)
 			);
 		}
 	}
