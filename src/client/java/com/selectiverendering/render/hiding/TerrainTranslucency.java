@@ -50,6 +50,7 @@ public final class TerrainTranslucency {
 		}
 		else {
 			SPRITES.put(builder.section, builder.sprites);
+			RetainedTerrain.prebuild(builder.section, builder.quads);
 			SECTIONS.put(builder.section, builder.quads);
 		}
 	}

@@ -66,6 +66,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -78,11 +80,11 @@ public final class RetainedTerrain {
 	private static final float SORT_MOVE_SQUARED = 0.25F;
 
 	// 每帧最多上传的新四边形数、最多落实的重排结果数。
-	private static final int UPLOAD_QUAD_BUDGET = 16384;
+	private static final int UPLOAD_QUAD_BUDGET = 65536;
 	private static final int SORT_UPLOAD_BUDGET = 64;
 
 	// 不依赖渲染线程状态的构建和排序都在这里并行做，渲染线程只负责上传。
-	private static final ExecutorService POOL = Executors.newFixedThreadPool(Math.clamp(Runtime.getRuntime().availableProcessors() / 4, 1, 4), runnable -> {
+	private static final ExecutorService POOL = Executors.newFixedThreadPool(Math.clamp(Runtime.getRuntime().availableProcessors() / 2, 2, 8), runnable -> {
 		Thread thread = new Thread(runnable, "selective-rendering-terrain");
 		thread.setDaemon(true);
 		return thread;
@@ -90,7 +92,8 @@ public final class RetainedTerrain {
 
 	private static final List<GpuBuffer> GRAVEYARD = new ArrayList<>();
 	private static final Map<Long, Section> SECTIONS = new HashMap<>();
-	private static final Map<Long, Pending> PENDING = new HashMap<>();
+	// 后台线程在区块编译完成时就把顶点数据建好放进来，渲染线程只负责上传。
+	private static final Map<Long, Pending> PENDING = new ConcurrentHashMap<>();
 
 	private static Frame current;
 	private static SubmitNodeCollector currentStorage; // 当前主画面的提交目标，阴影图等其它提交靠它区分
@@ -157,6 +160,21 @@ public final class RetainedTerrain {
 		//?} else {
 		/*return shaders ? RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.translucentMovingBlock();
 		*///?}
+	}
+
+	// 在区块编译线程上调用：不开光影时顶点格式已知，直接把这个区段的顶点数据建好，不用等渲染线程来触发。
+	public static void prebuild(long section, List<TerrainTranslucency.Quad> quads) {
+		if (ShaderPackState.active()) {
+			return;
+		}
+
+		try {
+			VertexFormat format = renderType(false).format();
+			PENDING.put(section, new Pending(quads, CompletableFuture.completedFuture(buildData(quads, format))));
+		}
+		catch (Exception exception) {
+			Log.error("[terrain] prebuild failed", exception);
+		}
 	}
 
 	// 必须在实体提交时建造缓冲：开着光影时，只有此时构造的 BufferBuilder 才会按 Iris 的扩展顶点格式写数据。
@@ -232,7 +250,9 @@ public final class RetainedTerrain {
 				continue;
 			}
 
-			if (!frustum.isVisible(new AABB(minX, minY, minZ, minX + 16, minY + 16, minZ + 16))) {
+			// 不开光影时视锥外的区段也先上传，转头时才不会因为现建而闪烁。
+			boolean visible = frustum.isVisible(new AABB(minX, minY, minZ, minX + 16, minY + 16, minZ + 16));
+			if (!visible && shaders) {
 				continue;
 			}
 
@@ -287,6 +307,10 @@ public final class RetainedTerrain {
 				if (built == null) {
 					continue;
 				}
+			}
+
+			if (!visible) {
+				continue;
 			}
 
 			boolean marked = false;
