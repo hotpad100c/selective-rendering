@@ -28,6 +28,7 @@ public final class SelectiveRenderingManager {
 	public static final int DEFAULT_TRANSPARENCY = 50;
 	public static final String DEFAULT_WAND = "minecraft:breeze_rod";
 	public static final boolean DEFAULT_FULL_BRIGHT = true;
+	public static final boolean DEFAULT_BUILD_HIDDEN_MESH = false;
 
 	/** 按范围和名单条件决定淡化对象；枚举顺序也是界面和滚轮的切换顺序。 */
 	public enum Mode implements IConfigOptionListEntry {
@@ -224,6 +225,7 @@ public final class SelectiveRenderingManager {
 	private static boolean invert = DEFAULT_INVERT;
 	private static String wand = DEFAULT_WAND;
 	private static boolean fullBright = DEFAULT_FULL_BRIGHT;
+	private static volatile boolean buildHiddenMesh = DEFAULT_BUILD_HIDDEN_MESH;
 	private static boolean passThrough = DEFAULT_PASS_THROUGH;
 	public static BlockPos corner1;
 	public static BlockPos corner2;
@@ -261,6 +263,7 @@ public final class SelectiveRenderingManager {
 			invert = config.invert;
 			wand = config.wand == null || config.wand.isBlank() ? DEFAULT_WAND : config.wand.trim();
 			fullBright = config.fullBright;
+			buildHiddenMesh = config.buildHiddenMesh;
 			passThrough = config.passThrough;
 
 			setRules(config.rules);
@@ -338,7 +341,8 @@ public final class SelectiveRenderingManager {
 		Log.debug("[state] transparency {}%", clamped);
 
 		// 两端都是半透明时只有透明度数值变了，常驻缓冲在绘制时取最新透明度，不用重建区块。
-		boolean partial = previous > 0 && previous < MAX_TRANSPARENCY && clamped > 0 && clamped < MAX_TRANSPARENCY;
+		int ceiling = buildHiddenMesh ? MAX_TRANSPARENCY + 1 : MAX_TRANSPARENCY;
+		boolean partial = previous > 0 && previous < ceiling && clamped > 0 && clamped < ceiling;
 		if (partial && RetainedTerrain.alphaFollowsDraw()) {
 			return;
 		}
@@ -642,6 +646,24 @@ public final class SelectiveRenderingManager {
 		}
 	}
 
+	/** 完全隐藏时是否仍然构建网格（只是不绘制），这样隐藏和半透明之间切换不用重建区块。 */
+	public static boolean isBuildHiddenMesh() {
+		return buildHiddenMesh;
+	}
+
+	public static void setBuildHiddenMesh(boolean value) {
+		if (value == buildHiddenMesh) {
+			return;
+		}
+
+		synchronized (LOCK) {
+			buildHiddenMesh = value;
+			persist();
+		}
+
+		RebuildScheduler.rebuildChunks();
+	}
+
 	public static boolean isFullBright() {
 		return config.fullBright();
 	}
@@ -841,6 +863,7 @@ public final class SelectiveRenderingManager {
 		config.invert = invert;
 		config.wand = wand;
 		config.fullBright = fullBright;
+		config.buildHiddenMesh = buildHiddenMesh;
 		config.passThrough = passThrough;
 		config.rules = List.copyOf(RULE_SOURCES);
 		config.recorded = List.copyOf(RECORD_SOURCES);

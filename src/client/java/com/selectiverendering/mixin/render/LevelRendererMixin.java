@@ -33,12 +33,10 @@ public class LevelRendererMixin {
 
 	@Inject(method = "submitEntities", at = @At("TAIL"))
 	private void selectiveRendering$submitTerrainTranslucency(PoseStack poseStack, LevelRenderState levelRenderState, SubmitNodeCollector output, CallbackInfo ci) {
-		//? if >=26.3 {
 		ClientLevel level = Minecraft.getInstance().level;
 		if (level != null) {
 			RetainedTerrain.prepare(level, levelRenderState.cameraRenderState, output);
 		}
-		//?}
 	}
 
 	@Inject(method = "finalizeGizmoCollection", at = @At("TAIL"), require = 0)

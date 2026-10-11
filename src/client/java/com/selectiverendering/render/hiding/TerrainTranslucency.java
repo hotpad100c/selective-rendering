@@ -33,11 +33,7 @@ public final class TerrainTranslucency {
 	}
 
 	public static void begin(long section) {
-		//? if >=26.3 {
 		BUILDER.set(new Builder(section, true));
-		//?} else {
-		/*BUILDER.set(new Builder(section, false));
-		*///?}
 	}
 
 	public static void finish(boolean completed) {

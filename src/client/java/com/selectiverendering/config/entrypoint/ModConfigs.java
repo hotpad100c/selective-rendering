@@ -50,6 +50,7 @@ public final class ModConfigs {
 	public static final ConfigHotkey OPEN_CONFIG_GUI = new ConfigHotkey("open_config_gui", "X,V", KeybindSettings.DEFAULT).apply(KEY);
 	public static final ConfigString WAND = new ConfigString("wand", SelectiveRenderingManager.DEFAULT_WAND).apply(KEY);
 	public static final ConfigBoolean FULL_BRIGHT = new ConfigBoolean("full_bright", SelectiveRenderingManager.DEFAULT_FULL_BRIGHT).apply(KEY);
+	public static final ConfigBoolean BUILD_HIDDEN_MESH = new ConfigBoolean("build_hidden_mesh", SelectiveRenderingManager.DEFAULT_BUILD_HIDDEN_MESH).apply(KEY);
 	public static final ConfigBooleanHotkeyed PASS_THROUGH = new ConfigBooleanHotkeyed("pass_through", SelectiveRenderingManager.DEFAULT_PASS_THROUGH, "").apply(KEY);
 	public static final SuggestingStringList RECORDED = new SuggestingStringList("recorded", SuggestKind.BLOCK).apply(KEY);
 	public static final ConfigOptionList RECORD_MODE = new ConfigOptionList("record_mode", SelectiveRenderingManager.DEFAULT_RECORD_MODE).apply(KEY);
@@ -66,6 +67,7 @@ public final class ModConfigs {
 		OPEN_CONFIG_GUI,
 		WAND,
 		FULL_BRIGHT,
+		BUILD_HIDDEN_MESH,
 		PASS_THROUGH,
 		RECORDED,
 		RECORD_MODE,
@@ -89,6 +91,7 @@ public final class ModConfigs {
 		RULES.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setRuleSources(config.getStrings())));
 		WAND.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setWand(config.getStringValue())));
 		FULL_BRIGHT.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setFullBright(config.getBooleanValue())));
+		BUILD_HIDDEN_MESH.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setBuildHiddenMesh(config.getBooleanValue())));
 		PASS_THROUGH.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setPassThrough(config.getBooleanValue())));
 		RECORDED.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setRecordSources(config.getStrings())));
 		RECORD_MODE.setValueChangeCallback(config -> write(() -> SelectiveRenderingManager.setRecordMode((RecordMode) config.getOptionListValue())));
@@ -135,6 +138,7 @@ public final class ModConfigs {
 			RULES.setStrings(SelectiveRenderingManager.ruleSources());
 			WAND.setValueFromString(SelectiveRenderingManager.getWand());
 			FULL_BRIGHT.setBooleanValue(SelectiveRenderingManager.isFullBright());
+			BUILD_HIDDEN_MESH.setBooleanValue(SelectiveRenderingManager.isBuildHiddenMesh());
 			PASS_THROUGH.setBooleanValue(SelectiveRenderingManager.isPassThrough());
 			RECORDED.setStrings(SelectiveRenderingManager.recordSources());
 			RECORD_MODE.setOptionListValue(SelectiveRenderingManager.getRecordMode());

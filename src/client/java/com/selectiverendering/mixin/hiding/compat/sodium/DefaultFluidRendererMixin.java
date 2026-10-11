@@ -60,7 +60,7 @@ public class DefaultFluidRendererMixin {
 		selectiveRendering$pos = pos;
 		selectiveRendering$level = level;
 
-		if (alpha == 0) {
+		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
 			ci.cancel();
 			return;
 		}
@@ -145,7 +145,7 @@ public class DefaultFluidRendererMixin {
 	)
 	private void selectiveRendering$captureQuad(ChunkModelBuilder builder, TranslucentGeometryCollector collector, Material material, BlockPos pos, ModelQuadView quad, ModelQuadFacing facing, boolean shade, CallbackInfo ci) {
 		int alpha = selectiveRendering$alpha;
-		if (alpha <= 0 || alpha >= 255 || !TerrainTranslucency.capturing()) {
+		if (alpha < 0 || alpha >= 255 || !TerrainTranslucency.capturing() || (alpha == 0 && !SelectiveRenderingManager.isBuildHiddenMesh())) {
 			return;
 		}
 

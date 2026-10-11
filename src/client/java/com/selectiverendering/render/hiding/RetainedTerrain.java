@@ -1,24 +1,50 @@
 package com.selectiverendering.render.hiding;
 
-//? if >=26.3 {
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
 import com.mojang.blaze3d.vertex.MeshData;
+//? if >=26.3 {
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.IndexType;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.vertex.VertexFormat;
+//?} else if >=26.2 {
+/*import com.mojang.blaze3d.IndexType;
+import com.mojang.blaze3d.PrimitiveTopology;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.vertex.VertexFormat;
+*///?} else {
+/*import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.ScissorState;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat.IndexType;
+import com.mojang.blaze3d.vertex.VertexFormat.Mode;
+import com.selectiverendering.mixin.hiding.blockentity.RenderTypeAccessor;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import java.util.Map.Entry;
+import java.util.OptionalDouble;
+import java.util.OptionalInt;
+*///?}
+//? if >=26.3 {
+import net.minecraft.client.renderer.StagedVertexBuffer;
+//?}
+//? if >=26.2 {
+import net.minecraft.client.renderer.rendertype.PreparedRenderType;
+//?}
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.util.Log;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -126,7 +152,11 @@ public final class RetainedTerrain {
 
 	// 开着光影时用半透明实体管线，没开光影时用原版区块的半透明管线
 	private static RenderType renderType(boolean shaders) {
+		//? if >=26.3 {
 		return shaders ? RenderTypes.entityTranslucentCull(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.translucentMovingBlock();
+		//?} else {
+		/*return shaders ? RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.translucentMovingBlock();
+		*///?}
 	}
 
 	// 必须在实体提交时建造缓冲：开着光影时，只有此时构造的 BufferBuilder 才会按 Iris 的扩展顶点格式写数据。
@@ -262,7 +292,7 @@ public final class RetainedTerrain {
 			boolean marked = false;
 
 			for (BufferPice piece : built.pieces()) {
-				if (piece.indexCount <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
+				if (piece.indexCount <= 0 || (piece.global ? SelectiveRenderingManager.config().alpha() : piece.alpha) <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
 					continue;
 				}
 
@@ -297,10 +327,32 @@ public final class RetainedTerrain {
 		// 区段之间也要从远到近画。
 		placedList.sort((a, b) -> Float.compare(distanceSquared(b), distanceSquared(a)));
 
+		//? if >=26.2 {
 		current = new Frame(placedList, RenderSystem.getModelViewMatrixCopy(), shaders);
+		//?} else {
+		/*current = new Frame(placedList, new Matrix4f(), shaders);
+		*///?}
 	}
 
+	//? if >=26.3 {
 	public static void draw(RenderPass pass, Object storage) {
+		drawFrame(pass, storage);
+	}
+	//?} else {
+	/*public static void draw(Object storage) {
+		drawFrame(null, storage);
+	}
+	*///?}
+
+	private static BufferBuilder newBuilder(ByteBufferBuilder bytes, VertexFormat format) {
+		//? if >=26.2 {
+		return new BufferBuilder(bytes, PrimitiveTopology.QUADS, format);
+		//?} else {
+		/*return new BufferBuilder(bytes, Mode.QUADS, format);
+		*///?}
+	}
+
+	private static void drawFrame(Object pass, Object storage) {
 		Frame frame = current;
 		if (frame == null || storage != currentStorage) {
 			return;
@@ -308,6 +360,7 @@ public final class RetainedTerrain {
 
 		current = null;
 
+		//? if >=26.2 {
 		// 透明度由 ColorModulator 提供，顶点 alpha 恒为 255。
 		PreparedRenderType base = renderType(frame.shaders()).prepare();
 		Matrix4f texture = new Matrix4f();
@@ -319,18 +372,108 @@ public final class RetainedTerrain {
 
 			Matrix4f modelView = new Matrix4f(frame.view()).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
 			GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture);
-			PreparedRenderType prepared = new PreparedRenderType(base.name(), base.pipeline(), base.oitPipelineSet(), transform, base.scissorState(), base.textures());
 
-			if (piece.indexBuffer != null) {
-				prepared.drawFromBuffer(new StagedVertexBuffer.ExecuteInfo(piece.buffer, piece.indexBuffer, piece.indexType, 0, 0, piece.indexCount, PrimitiveTopology.QUADS), pass);
-				continue;
+			drawPiece(withTransform(base, transform), pass, piece);
+		}
+		//?} else {
+		/*drawImmediate(frame);
+		*///?}
+	}
+
+	//? if >=26.2 {
+	private static PreparedRenderType withTransform(PreparedRenderType base, GpuBufferSlice transform) {
+		//? if >=26.3 {
+		return new PreparedRenderType(base.name(), base.pipeline(), base.oitPipelineSet(), transform, base.scissorState(), base.textures());
+		//?} else {
+		/*return new PreparedRenderType(base.pipeline(), base.outputTarget(), transform, base.scissorState(), base.textures());
+		*///?}
+	}
+
+	private static void drawPiece(PreparedRenderType prepared, Object pass, BufferPice piece) {
+		//? if >=26.3 {
+		RenderPass renderPass = (RenderPass) pass;
+		if (piece.indexBuffer != null) {
+			prepared.drawFromBuffer(new StagedVertexBuffer.ExecuteInfo(piece.buffer, piece.indexBuffer, piece.indexType, 0, 0, piece.indexCount, PrimitiveTopology.QUADS), renderPass);
+			return;
+		}
+
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		indices.getBuffer(piece.indexCount);
+		prepared.drawFromBuffer(new StagedVertexBuffer.ExecuteInfo(piece.buffer, null, indices.type(), 0, 0, piece.indexCount, PrimitiveTopology.QUADS), renderPass);
+		//?} else {
+		/*if (piece.indexBuffer != null) {
+			prepared.drawFromBuffer(piece.buffer, piece.indexBuffer, piece.indexType, 0, 0, piece.indexCount);
+			return;
+		}
+
+		RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
+		prepared.drawFromBuffer(piece.buffer, indices.getBuffer(piece.indexCount), indices.type(), 0, 0, piece.indexCount);
+		*///?}
+	}
+	//?} else {
+	/*// 26.1.2 没有 PreparedRenderType：按 RenderType.draw 的做法自己开一个渲染通道，一次画完所有区段。
+	private static void drawImmediate(Frame frame) {
+		RenderType type = renderType(frame.shaders());
+		RenderSetup state = ((RenderTypeAccessor) (Object) type).selectiveRendering$state();
+
+		RenderTarget target = type.outputTarget().getRenderTarget();
+		GpuTextureView color = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : target.getColorTextureView();
+		GpuTextureView depth = null;
+		if (target.useDepth) {
+			depth = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : target.getDepthTextureView();
+		}
+
+		Matrix4f view = new Matrix4f(RenderSystem.getModelViewMatrix());
+		Matrix4f texture = new Matrix4f();
+		int globalAlpha = SelectiveRenderingManager.config().alpha();
+
+		// 写 DynamicTransforms 要映射缓冲，必须在打开渲染通道之前全部写好。
+		List<GpuBufferSlice> transforms = new ArrayList<>();
+		for (Placed placed : frame.placed()) {
+			BufferPice piece = placed.bufferPice();
+			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
+
+			Matrix4f modelView = new Matrix4f(view).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
+			transforms.add(RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture));
+		}
+
+		var encoder = RenderSystem.getDevice().createCommandEncoder();
+
+		try (RenderPass renderPass = depth != null
+			? encoder.createRenderPass(() -> "selective_rendering translucent terrain", color, OptionalInt.empty(), depth, OptionalDouble.empty())
+			: encoder.createRenderPass(() -> "selective_rendering translucent terrain", color, OptionalInt.empty())) {
+			renderPass.setPipeline(type.pipeline());
+
+			ScissorState scissor = RenderSystem.getScissorStateForRenderTypeDraws();
+			if (scissor.enabled()) {
+				renderPass.enableScissor(scissor.x(), scissor.y(), scissor.width(), scissor.height());
 			}
 
-			RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(PrimitiveTopology.QUADS);
-			indices.getBuffer(piece.indexCount);
-			prepared.drawFromBuffer(new StagedVertexBuffer.ExecuteInfo(piece.buffer, null, indices.type(), 0, 0, piece.indexCount, PrimitiveTopology.QUADS), pass);
+			RenderSystem.bindDefaultUniforms(renderPass);
+
+			for (int index = 0; index < frame.placed().size(); index++) {
+				BufferPice piece = frame.placed().get(index).bufferPice();
+
+				renderPass.setUniform("DynamicTransforms", transforms.get(index));
+				renderPass.setVertexBuffer(0, piece.buffer);
+
+				for (Entry<String, RenderSetup.TextureAndSampler> entry : state.getTextures().entrySet()) {
+					renderPass.bindTexture(entry.getKey(), entry.getValue().textureView(), entry.getValue().sampler());
+				}
+
+				if (piece.indexBuffer != null) {
+					renderPass.setIndexBuffer(piece.indexBuffer, piece.indexType);
+				}
+				else {
+					RenderSystem.AutoStorageIndexBuffer indices = RenderSystem.getSequentialBuffer(Mode.QUADS);
+					renderPass.setIndexBuffer(indices.getBuffer(piece.indexCount), indices.type());
+				}
+
+				renderPass.drawIndexed(0, 0, piece.indexCount, 1);
+			}
 		}
 	}
+	*///?}
 
 	private static float distanceSquared(Placed placed) {
 		float x = placed.x() + 8.0F;
@@ -455,7 +598,7 @@ public final class RetainedTerrain {
 		List<PieceData> result = new ArrayList<>();
 		for (List<TerrainTranslucency.Quad> group : groups.values()) {
 			try (ByteBufferBuilder bytes = new ByteBufferBuilder(Math.max(1, group.size()) * 4 * VERTEX_STRIDE)) {
-				BufferBuilder builder = new BufferBuilder(bytes, PrimitiveTopology.QUADS, format);
+				BufferBuilder builder = newBuilder(bytes, format);
 				float[] bounds = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
 				float[] centroids = new float[group.size() * 3];
 				fill(builder, group, bounds, centroids);
@@ -511,7 +654,7 @@ public final class RetainedTerrain {
 
 	private static BufferPice buildPiece(List<TerrainTranslucency.Quad> quads, RenderType type) {
 		try (ByteBufferBuilder bytes = new ByteBufferBuilder(Math.max(1, quads.size()) * 4 * VERTEX_STRIDE)) {
-			BufferBuilder builder = new BufferBuilder(bytes, PrimitiveTopology.QUADS, type.format());
+			BufferBuilder builder = newBuilder(bytes, type.format());
 			float[] bounds = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
 			float[] centroids = new float[quads.size() * 3];
 			fill(builder, quads, bounds, centroids);
@@ -544,13 +687,3 @@ public final class RetainedTerrain {
 		SECTIONS.clear();
 	}
 }
-//?} else {
-/*public final class RetainedTerrain {
-	private RetainedTerrain() {
-	}
-
-	public static boolean alphaFollowsDraw() {
-		return false;
-	}
-}
-*///?}

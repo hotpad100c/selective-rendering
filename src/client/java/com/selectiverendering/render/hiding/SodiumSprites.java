@@ -1,6 +1,5 @@
 package com.selectiverendering.render.hiding;
 
-//? if >=26.3 {
 import net.caffeinemc.mods.sodium.api.texture.SpriteUtil;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
@@ -18,14 +17,3 @@ public final class SodiumSprites {
 		}
 	}
 }
-//?} else {
-/*import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-
-public final class SodiumSprites {
-	private SodiumSprites() {
-	}
-
-	public static void markActive(TextureAtlasSprite sprite) {
-	}
-}
-*///?}

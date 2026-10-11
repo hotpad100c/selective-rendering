@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.render.hiding.VanillaCapture;
 import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -42,7 +43,7 @@ public class FluidRendererMixin {
 		POS.set(pos);
 		LEVEL.set(level);
 
-		if (alpha == 0) {
+		if (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
 			ci.cancel();
         }
 	}
@@ -123,13 +124,11 @@ public class FluidRendererMixin {
 	/** 半透明流体截流：顶点交给常驻缓冲的采集，不写进区块。 */
 	@Inject(method = "vertex", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$captureVertex(VertexConsumer consumer, float x, float y, float z, int color, float u, float v, int light, CallbackInfo ci) {
-		//? if >=26.3 {
 		int alpha = ALPHA.get();
-		if (alpha > 0 && alpha < 255 && TerrainTranslucency.capturing()) {
+		if (alpha >= 0 && alpha < 255 && TerrainTranslucency.capturing() && (alpha > 0 || SelectiveRenderingManager.isBuildHiddenMesh())) {
 			VanillaCapture.fluidVertex(x, y, z, color, u, v, light, alpha);
 			ci.cancel();
 		}
-		//?}
 	}
 
 	@ModifyVariable(method = "vertex", at = @At("HEAD"), ordinal = 0)

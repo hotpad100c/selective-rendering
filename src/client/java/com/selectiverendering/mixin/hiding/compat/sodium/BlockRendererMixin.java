@@ -49,7 +49,7 @@ public class BlockRendererMixin {
 		context.selectiveRendering$setAlpha(alpha);
 
 		try {
-			if (alpha != 0) {
+			if (alpha != 0 || (TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
 				original.call(model, state, pos, origin);
 			}
 		} finally {
@@ -71,13 +71,17 @@ public class BlockRendererMixin {
 	@Inject(method = "bufferQuad", at = @At("HEAD"), cancellable = true)
 	private void selectiveRendering$onBufferQuad(MutableQuadViewImpl quad, float[] brightnesses, Material material, CallbackInfo ci) {
 		int alpha = this.selectiveRendering$alpha();
-		if (alpha <= 0 || alpha >= 255) {
+		if (alpha < 0 || alpha >= 255) {
 			return;
 		}
 
-		if (TerrainTranslucency.capturing()) {
+		if (TerrainTranslucency.capturing() && (alpha > 0 || SelectiveRenderingManager.isBuildHiddenMesh())) {
 			this.selectiveRendering$capture(quad, brightnesses, alpha);
 			ci.cancel();
+			return;
+		}
+
+		if (alpha == 0) {
 			return;
 		}
 

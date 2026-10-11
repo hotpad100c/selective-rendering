@@ -111,5 +111,8 @@
   "selective_rendering.hint.operation_right": "With states / by item (%s)",
   "selective_rendering.hint.scope_global": "global list",
   "selective_rendering.hint.scope_region": "region #%s local list",
-  "selective_rendering.message.select_region_first": "Entities only have region lists: middle click a region first"
+  "selective_rendering.message.select_region_first": "Entities only have region lists: middle click a region first",
+  "selective_rendering.config.name.build_hidden_mesh": "Build mesh when hidden",
+  "selective_rendering.config.prettyName.build_hidden_mesh": "Build mesh when hidden",
+  "selective_rendering.config.comment.build_hidden_mesh": "Keep building the mesh of fully hidden blocks and just skip drawing it, so switching between hidden and translucent never rebuilds chunks. Costs some memory"
 }

@@ -1,6 +1,5 @@
 package com.selectiverendering.render.hiding;
 
-//? if >=26.3 {
 import com.mojang.blaze3d.vertex.QuadInstance;
 import com.selectiverendering.SelectiveRenderingManager;
 import net.minecraft.client.model.geom.builders.UVPair;
@@ -100,18 +99,3 @@ public final class VanillaCapture {
 		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, nx, ny, nz, alpha, alpha == SelectiveRenderingManager.config().alpha()));
 	}
 }
-//?} else {
-/*import com.mojang.blaze3d.vertex.QuadInstance;
-import net.minecraft.client.resources.model.geometry.BakedQuad;
-
-public final class VanillaCapture {
-	private VanillaCapture() {
-	}
-
-	public static void block(float x, float y, float z, BakedQuad quad, QuadInstance instance, int alpha) {
-	}
-
-	public static void fluidVertex(float x, float y, float z, int color, float u, float v, int light, int alpha) {
-	}
-}
-*///?}

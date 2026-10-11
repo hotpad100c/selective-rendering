@@ -339,3 +339,9 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 `FluidRendererMixin`（流体，拦截 `vertex`）通过 `VanillaCapture` 截流，`SectionCompilerMixin` 负责 begin / finish，
 其余完全复用上面这套缓冲和绘制。
 
+移植与「隐藏时仍构建网格」：26.2 用 `PreparedRenderType.drawFromBuffer`（无 RenderPass 参数，钩 `executeTranslucent()`）；
+26.1.2 没有 `PreparedRenderType`，`RetainedTerrain.drawImmediate` 按 `RenderType.draw` 的做法自己开渲染通道，
+钩 `FeatureRenderDispatcher.renderTranslucentFeatures`，用当时的 `RenderSystem` 模型视图矩阵。
+配置 `build_hidden_mesh`（默认关）开启后，alpha 为 0 的方块 / 流体也截流（绘制时跳过），
+全局透明度在完全隐藏和半透明之间变化时不重建区块。
+

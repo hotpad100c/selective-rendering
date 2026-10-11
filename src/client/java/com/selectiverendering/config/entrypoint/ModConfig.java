@@ -88,6 +88,7 @@ public final class ModConfig {
 	public String wand = "minecraft:breeze_rod";
 
 	public boolean fullBright = SelectiveRenderingManager.DEFAULT_FULL_BRIGHT;
+	public boolean buildHiddenMesh = SelectiveRenderingManager.DEFAULT_BUILD_HIDDEN_MESH;
 
 	public boolean passThrough = SelectiveRenderingManager.DEFAULT_PASS_THROUGH;
 

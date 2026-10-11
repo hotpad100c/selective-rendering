@@ -81,7 +81,7 @@ public class ModelBlockRendererMixin {
 			return;
 		}
 
-		if (selectiveRendering$blockAlpha.get() == 0) {
+		if (selectiveRendering$blockAlpha.get() == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh())) {
 			ci.cancel();
 		}
 	}
@@ -141,17 +141,15 @@ public class ModelBlockRendererMixin {
 		}
 
 		int alpha = selectiveRendering$blockAlpha.get();
-		if (alpha <= 0 || alpha >= 255) {
+		if (alpha < 0 || alpha >= 255 || (alpha == 0 && !(TerrainTranslucency.capturing() && SelectiveRenderingManager.isBuildHiddenMesh()))) {
 			original.call(output, x, y, z, quad, instance);
 			return;
 		}
 
-		//? if >=26.3 {
 		if (TerrainTranslucency.capturing()) {
 			VanillaCapture.block(x, y, z, quad, instance, alpha);
 			return;
 		}
-		//?}
 
 		BakedQuad.MaterialInfo material = quad.materialInfo();
 		if (material.layer() != ChunkSectionLayer.TRANSLUCENT) {

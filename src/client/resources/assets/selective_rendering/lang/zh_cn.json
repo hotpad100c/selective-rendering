@@ -111,5 +111,8 @@
   "selective_rendering.hint.operation_right": "带状态的方块 / 按物品区分（%s）",
   "selective_rendering.hint.scope_global": "全局名单",
   "selective_rendering.hint.scope_region": "选区 #%s 的本地名单",
-  "selective_rendering.message.select_region_first": "实体只有选区名单：请先用中键选中一个选区"
+  "selective_rendering.message.select_region_first": "实体只有选区名单：请先用中键选中一个选区",
+  "selective_rendering.config.name.build_hidden_mesh": "隐藏时仍构建网格",
+  "selective_rendering.config.prettyName.build_hidden_mesh": "隐藏时仍构建网格",
+  "selective_rendering.config.comment.build_hidden_mesh": "完全隐藏的方块仍然构建网格，只是不绘制，这样在隐藏和半透明之间切换不需要重建区块。会多占一些内存"
 }
