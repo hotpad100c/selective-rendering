@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.compat.sodium;
 
+import com.selectiverendering.SelectiveRenderingManager;
 import net.caffeinemc.mods.sodium.client.render.texture.SpriteFinderCache;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Final;
@@ -111,7 +112,6 @@ public class BlockRendererMixin {
 
 		Vector3f normal = quad.faceNormal();
 		float inset = quad.getCullFace() == null ? 0.0F : CAPTURE_INSET;
-		float lightScale = TerrainTranslucency.DRAW_ALPHA ? 1.0F : 1.0F / (0.75F + 0.25F * alpha / 255.0F);
 
 		for (int i = 0; i < 4; i++) {
 			int source = ModelQuadOrientation.NORMAL.getVertexIndex(i);
@@ -128,20 +128,12 @@ public class BlockRendererMixin {
 			int red = (int) (((color >> 16) & 0xFF) * shade);
 			int green = (int) (((color >> 8) & 0xFF) * shade);
 			int blue = (int) ((color & 0xFF) * shade);
-			colors[i] = ((TerrainTranslucency.DRAW_ALPHA ? 255 : alpha) << 24) | (red << 16) | (green << 8) | blue;
+			colors[i] = (255 << 24) | (red << 16) | (green << 8) | blue;
 
-			lights[i] = scaleLight(quad.getLight(source), lightScale);
+			lights[i] = quad.getLight(source);
 		}
 
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z()));
-	}
-
-	/** 部分光影包会按 (0.75 + 0.25 * 顶点 alpha) 缩放光照，alpha 越低越暗，这里按同一公式预先补偿。 */
-	@Unique
-	private static int scaleLight(int light, float scale) {
-		int block = Math.min(240, Math.round((light & 0xFF) * scale));
-		int sky = Math.min(240, Math.round(((light >> 16) & 0xFF) * scale));
-		return block | (sky << 16);
+		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, normal.x(), normal.y(), normal.z(), alpha, alpha == SelectiveRenderingManager.config().alpha()));
 	}
 
 	@Unique

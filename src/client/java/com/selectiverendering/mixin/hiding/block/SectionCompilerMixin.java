@@ -1,5 +1,6 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.selectiverendering.render.hiding.TerrainTranslucency;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.selectiverendering.render.hiding.AlphaGetter;
@@ -34,6 +35,7 @@ public class SectionCompilerMixin {
 		CallbackInfoReturnable<SectionCompiler.Results> cir
 	) {
 		selectiveRendering$region.set(region);
+		TerrainTranslucency.begin(sectionPos.asLong());
 	}
 
 	@Inject(method = "compile", at = @At("TAIL"), require = 1)
@@ -45,6 +47,7 @@ public class SectionCompilerMixin {
 		CallbackInfoReturnable<SectionCompiler.Results> cir
 	) {
 		selectiveRendering$region.remove();
+		TerrainTranslucency.finish(true);
 	}
 
 	@WrapOperation(

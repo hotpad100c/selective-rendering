@@ -1,5 +1,6 @@
 package com.selectiverendering;
 
+import com.selectiverendering.render.hiding.RetainedTerrain;
 import com.selectiverendering.config.entrypoint.ModConfig;
 import com.selectiverendering.config.presets.Preset;
 import com.selectiverendering.config.region.RenderConfig;
@@ -322,17 +323,26 @@ public final class SelectiveRenderingManager {
 	/** 设置透明度百分比：100 为完全隐藏，0 为不透明。 */
 	public static void setTransparency(int value) {
 		int clamped = Math.clamp(value, 0, MAX_TRANSPARENCY);
+		int previous;
 
 		synchronized (LOCK) {
 			if (clamped == transparency) {
 				return;
 			}
 
+			previous = transparency;
 			transparency = clamped;
 			commit();
 		}
 
 		Log.debug("[state] transparency {}%", clamped);
+
+		// 两端都是半透明时只有透明度数值变了，常驻缓冲在绘制时取最新透明度，不用重建区块。
+		boolean partial = previous > 0 && previous < MAX_TRANSPARENCY && clamped > 0 && clamped < MAX_TRANSPARENCY;
+		if (partial && RetainedTerrain.alphaFollowsDraw()) {
+			return;
+		}
+
 		RebuildScheduler.rebuildHidden();
 	}
 

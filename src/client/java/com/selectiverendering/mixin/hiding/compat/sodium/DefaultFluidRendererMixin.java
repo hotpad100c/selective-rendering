@@ -168,23 +168,15 @@ public class DefaultFluidRendererMixin {
 			int red = (int) ((abgr & 0xFF) * brightness);
 			int green = (int) (((abgr >> 8) & 0xFF) * brightness);
 			int blue = (int) (((abgr >> 16) & 0xFF) * brightness);
-			colors[i] = ((TerrainTranslucency.DRAW_ALPHA ? 255 : alpha) << 24) | (red << 16) | (green << 8) | blue;
+			colors[i] = (255 << 24) | (red << 16) | (green << 8) | blue;
 
-			lights[i] = scaleLight(vertex.light, TerrainTranslucency.DRAW_ALPHA ? 1.0F : 1.0F / (0.75F + 0.25F * alpha / 255.0F));
+			lights[i] = vertex.light;
 		}
 
 		int packedNormal = quad.getFaceNormal();
-		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal)));
+		TerrainTranslucency.add(new TerrainTranslucency.Quad(positions, uvs, colors, lights, NormI8.unpackX(packedNormal), NormI8.unpackY(packedNormal), NormI8.unpackZ(packedNormal), alpha, alpha == SelectiveRenderingManager.config().alpha()));
 		TerrainTranslucency.addSprite(quad.getSprite());
 		ci.cancel();
-	}
-
-	/** 部分光影包会按 (0.75 + 0.25 * 顶点 alpha) 缩放光照，这里按同一公式预先补偿。 */
-	@Unique
-	private static int scaleLight(int light, float scale) {
-		int block = Math.min(240, Math.round((light & 0xFF) * scale));
-		int sky = Math.min(240, Math.round(((light >> 16) & 0xFF) * scale));
-		return block | (sky << 16);
 	}
 
 	@Inject(method = "writeQuad", at = @At("HEAD"))

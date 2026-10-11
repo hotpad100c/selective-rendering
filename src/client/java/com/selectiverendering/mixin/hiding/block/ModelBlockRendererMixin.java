@@ -1,5 +1,9 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.selectiverendering.render.hiding.VanillaCapture;
+import com.selectiverendering.render.hiding.TerrainTranslucency;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.mojang.blaze3d.vertex.QuadInstance;
 import com.selectiverendering.SelectiveRenderingManager;
 import com.selectiverendering.compat.Platform;
@@ -124,29 +128,41 @@ public class ModelBlockRendererMixin {
 		}
 	}
 
-	@ModifyArg(
+	/** 半透明方块截流到常驻缓冲；否则把需淡化的 quad 切换为半透明材质。 */
+	@WrapOperation(
 		method = "putQuadWithTint",
 		at = @At(value = "INVOKE", target = "Lnet/minecraft/client/renderer/block/BlockQuadOutput;put(FFFLnet/minecraft/client/resources/model/geometry/BakedQuad;Lcom/mojang/blaze3d/vertex/QuadInstance;)V"),
-		index = 3,
 		require = 1
 	)
-	/** 将需淡化的 quad 切换为半透明材质。 */
-	private BakedQuad selectiveRendering$adjustQuad(BakedQuad quad) {
+	private void selectiveRendering$putQuad(BlockQuadOutput output, float x, float y, float z, BakedQuad quad, QuadInstance instance, Operation<Void> original) {
 		if (MovingBlockRenderContext.alpha() != -1) {
-			return quad;
+			original.call(output, x, y, z, quad, instance);
+			return;
 		}
 
 		int alpha = selectiveRendering$blockAlpha.get();
-		BakedQuad.MaterialInfo material = quad.materialInfo();
-		if (alpha <= 0 || alpha >= 255 || material.layer() == ChunkSectionLayer.TRANSLUCENT) {
-			return quad;
+		if (alpha <= 0 || alpha >= 255) {
+			original.call(output, x, y, z, quad, instance);
+			return;
 		}
 
-		return new BakedQuad(
-			quad.position0(), quad.position1(), quad.position2(), quad.position3(),
-			quad.packedUV0(), quad.packedUV1(), quad.packedUV2(), quad.packedUV3(),
-			quad.direction(),
-			Platform.translucentMaterial(material)
-		);
+		//? if >=26.3 {
+		if (TerrainTranslucency.capturing()) {
+			VanillaCapture.block(x, y, z, quad, instance, alpha);
+			return;
+		}
+		//?}
+
+		BakedQuad.MaterialInfo material = quad.materialInfo();
+		if (material.layer() != ChunkSectionLayer.TRANSLUCENT) {
+			quad = new BakedQuad(
+				quad.position0(), quad.position1(), quad.position2(), quad.position3(),
+				quad.packedUV0(), quad.packedUV1(), quad.packedUV2(), quad.packedUV3(),
+				quad.direction(),
+				Platform.translucentMaterial(material)
+			);
+		}
+
+		original.call(output, x, y, z, quad, instance);
 	}
 }

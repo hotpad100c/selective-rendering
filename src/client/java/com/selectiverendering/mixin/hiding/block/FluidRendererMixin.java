@@ -1,5 +1,8 @@
 package com.selectiverendering.mixin.hiding.block;
 
+import com.selectiverendering.render.hiding.VanillaCapture;
+import com.selectiverendering.render.hiding.TerrainTranslucency;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.selectiverendering.render.hiding.AlphaGetter;
@@ -115,6 +118,18 @@ public class FluidRendererMixin {
 	private static boolean selectiveRendering$neighbourForcesFace(Direction direction, boolean sameFluid) {
 		BlockPos pos = POS.get();
 		return pos != null && AlphaGetter.fluidNeighbourForcesFace(LEVEL.get(), BlockPosScratch.offset(pos, direction), ALPHA.get(), sameFluid);
+	}
+
+	/** 半透明流体截流：顶点交给常驻缓冲的采集，不写进区块。 */
+	@Inject(method = "vertex", at = @At("HEAD"), cancellable = true)
+	private void selectiveRendering$captureVertex(VertexConsumer consumer, float x, float y, float z, int color, float u, float v, int light, CallbackInfo ci) {
+		//? if >=26.3 {
+		int alpha = ALPHA.get();
+		if (alpha > 0 && alpha < 255 && TerrainTranslucency.capturing()) {
+			VanillaCapture.fluidVertex(x, y, z, color, u, v, light, alpha);
+			ci.cancel();
+		}
+		//?}
 	}
 
 	@ModifyVariable(method = "vertex", at = @At("HEAD"), ordinal = 0)

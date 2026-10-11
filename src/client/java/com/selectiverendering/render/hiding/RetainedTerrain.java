@@ -4,30 +4,30 @@ package com.selectiverendering.render.hiding;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.ByteBufferBuilder;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.IndexType;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
-import net.caffeinemc.mods.sodium.api.texture.SpriteUtil;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.selectiverendering.SelectiveRenderingManager;
+import com.selectiverendering.util.Log;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.culling.Frustum;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
-import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.rendertype.PreparedRenderType;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import com.selectiverendering.SelectiveRenderingManager;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
@@ -37,42 +37,64 @@ import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public final class RetainedTerrain {
 	private static final int REBUILD_QUAD_BUDGET = 4096;
-	private static final int VERTEX_STRIDE = 36;
+	private static final int VERTEX_STRIDE = 48;
 	private static final float DEPTH_PUSH = 1.0005F;
-	// 每帧最多重排的四边形数，以及相机移动多远（平方）后需要重排。
-	private static final int SORT_QUAD_BUDGET = 16384;
+	// 相机移动多远（平方）后需要重排。
 	private static final float SORT_MOVE_SQUARED = 0.25F;
 
+	// 每帧最多上传的新四边形数、最多落实的重排结果数。
+	private static final int UPLOAD_QUAD_BUDGET = 16384;
+	private static final int SORT_UPLOAD_BUDGET = 64;
+
+	// 不依赖渲染线程状态的构建和排序都在这里并行做，渲染线程只负责上传。
+	private static final ExecutorService POOL = Executors.newFixedThreadPool(Math.clamp(Runtime.getRuntime().availableProcessors() / 4, 1, 4), runnable -> {
+		Thread thread = new Thread(runnable, "selective-rendering-terrain");
+		thread.setDaemon(true);
+		return thread;
+	});
+
 	private static final List<GpuBuffer> GRAVEYARD = new ArrayList<>();
-	private static final Map<Long, BufferPice> BUFFERS = new HashMap<>();
+	private static final Map<Long, Section> SECTIONS = new HashMap<>();
+	private static final Map<Long, Pending> PENDING = new HashMap<>();
 
 	private static Frame current;
-	private static SubmitNodeCollector currentStorage;//当前的目标Collector
+	private static SubmitNodeCollector currentStorage; // 当前主画面的提交目标，阴影图等其它提交靠它区分
 	private static ClientLevel lastLevel;
 	private static boolean lastShaders;
 
+	// 一个区段里同一透明度的四边形：每组一块顶点缓冲，透明度在绘制时提供。
 	private static final class BufferPice {
 		final GpuBuffer buffer;
 		final int indexCount;
-		final List<TerrainTranslucency.Quad> source;
+		final int alpha;
+		final boolean global;
 		final float minX, minY, minZ, maxX, maxY, maxZ;
 		// 每个四边形的中心（相对区段原点），用来按到相机的距离排序。
 		final float[] centroids;
-		// 按距离从远到近重排后的索引缓冲；还没排过时为 null，改用顺序索引。
+		// 按距离从远到近重排后的索引缓冲；还没排过时为 null，改用顺序索引
 		GpuBuffer indexBuffer;
 		IndexType indexType;
 		float sortX, sortY, sortZ;
+		// 正在后台做的排序，完成后在渲染线程上传
+		Future<ByteBuffer> sortJob;
+		float jobX, jobY, jobZ;
+		boolean retired;
 
-		BufferPice(GpuBuffer buffer, int indexCount, List<TerrainTranslucency.Quad> source, float[] bounds, float[] centroids) {
-			this.centroids = centroids;
+		BufferPice(GpuBuffer buffer, int indexCount, int alpha, boolean global, float[] bounds, float[] centroids) {
 			this.buffer = buffer;
 			this.indexCount = indexCount;
-			this.source = source;
+			this.alpha = alpha;
+			this.global = global;
+			this.centroids = centroids;
 			this.minX = bounds[0];
 			this.minY = bounds[1];
 			this.minZ = bounds[2];
@@ -82,29 +104,45 @@ public final class RetainedTerrain {
 		}
 	}
 
+	private record Section(List<TerrainTranslucency.Quad> source, List<BufferPice> pieces) {
+	}
+
+	// CPU 侧已经建好的一组顶点数据，等渲染线程上传。
+	private record PieceData(ByteBuffer vertices, int indexCount, int alpha, boolean global, float[] bounds, float[] centroids) {
+	}
+
+	private record Pending(List<TerrainTranslucency.Quad> source, Future<List<PieceData>> future) {
+	}
+
 	private record Placed(BufferPice bufferPice, float x, float y, float z) {
 	}
 
-	private record Frame(List<Placed> placed, Matrix4f view) {
+	private record Frame(List<Placed> placed, Matrix4f view, boolean shaders) {
 	}
 
-	// 必须在 实体提交 时建造缓冲，开着光影时只有此时构造的 BufferBuilder 才会按IRIS的扩展顶点格式写数据，有更好的办法吗...？
+	public static boolean alphaFollowsDraw() {
+		return true;
+	}
+
+	// 开着光影时用半透明实体管线，没开光影时用原版区块的半透明管线
+	private static RenderType renderType(boolean shaders) {
+		return shaders ? RenderTypes.entityTranslucentCull(TextureAtlas.LOCATION_BLOCKS) : RenderTypes.translucentMovingBlock();
+	}
+
+	// 必须在实体提交时建造缓冲：开着光影时，只有此时构造的 BufferBuilder 才会按 Iris 的扩展顶点格式写数据。
 	public static void prepare(ClientLevel level, CameraRenderState camera, SubmitNodeCollector collector) {
 		current = null;
 		currentStorage = collector;
 
+		GRAVEYARD.forEach(GpuBuffer::close);
+		GRAVEYARD.clear();
+
+		// 光影开关会改变使用的管线和顶点格式，已建好的缓冲都要丢掉；截流的数据和光影无关，保留。
 		boolean shaders = ShaderPackState.active();
 		if (shaders != lastShaders) {
 			releaseAll();
-			TerrainTranslucency.clear();
 			lastShaders = shaders;
 		}
-
-		if (!shaders) {
-			return;
-		}
-		GRAVEYARD.forEach(GpuBuffer::close);
-		GRAVEYARD.clear();
 
 		if (level != lastLevel) {
 			releaseAll();
@@ -113,12 +151,20 @@ public final class RetainedTerrain {
 		}
 
 		Map<Long, List<TerrainTranslucency.Quad>> sections = TerrainTranslucency.sections();
-		BUFFERS.entrySet().removeIf(entry -> {
+		SECTIONS.entrySet().removeIf(entry -> {
 			if (sections.containsKey(entry.getKey())) {
 				return false;
 			}
 
 			retire(entry.getValue());
+			return true;
+		});
+		PENDING.entrySet().removeIf(entry -> {
+			if (sections.containsKey(entry.getKey())) {
+				return false;
+			}
+
+			entry.getValue().future().cancel(true);
 			return true;
 		});
 
@@ -133,7 +179,9 @@ public final class RetainedTerrain {
 		double range = (Minecraft.getInstance().options.renderDistance().get() + 1) * 16.0;
 		double rangeSquared = range * range;
 		int budget = REBUILD_QUAD_BUDGET;
-		int sortBudget = SORT_QUAD_BUDGET;
+		int uploadBudget = UPLOAD_QUAD_BUDGET;
+		int sortUploads = SORT_UPLOAD_BUDGET;
+		RenderType type = renderType(shaders);
 
 		for (Map.Entry<Long, List<TerrainTranslucency.Quad>> entry : sections.entrySet()) {
 			SectionPos section = SectionPos.of(entry.getKey());
@@ -159,51 +207,97 @@ public final class RetainedTerrain {
 			}
 
 			List<TerrainTranslucency.Quad> quads = entry.getValue();
-			BufferPice bufferPice = BUFFERS.get(entry.getKey());
+			Section built = SECTIONS.get(entry.getKey());
 
-			if (bufferPice == null || bufferPice.source != quads) {
-				if (budget <= 0) {
-					if (bufferPice == null) {
-						continue;
+			if (built == null || built.source() != quads) {
+				if (shaders) {
+					// Iris 的扩展顶点格式只有此时在渲染线程才能写对，只能同步构建。
+					if (budget > 0) {
+						Section rebuilt = build(quads, type);
+						if (built != null) {
+							retire(built);
+						}
+
+						SECTIONS.put(entry.getKey(), rebuilt);
+						built = rebuilt;
+						budget -= quads.size();
 					}
 				}
 				else {
-					BufferPice rebuilt = build(quads);
-					if (bufferPice != null) {
-						retire(bufferPice);
+					Pending pending = PENDING.get(entry.getKey());
+					if (pending == null || pending.source() != quads) {
+						if (pending != null) {
+							pending.future().cancel(true);
+						}
+
+						VertexFormat format = type.format();
+						pending = new Pending(quads, POOL.submit(() -> buildData(quads, format)));
+						PENDING.put(entry.getKey(), pending);
 					}
 
-					BUFFERS.put(entry.getKey(), rebuilt);
-					bufferPice = rebuilt;
-					budget -= quads.size();
+					if (pending.future().isDone() && uploadBudget > 0) {
+						PENDING.remove(entry.getKey());
+
+						try {
+							Section uploaded = upload(quads, pending.future().get());
+							if (built != null) {
+								retire(built);
+							}
+
+							SECTIONS.put(entry.getKey(), uploaded);
+							built = uploaded;
+							uploadBudget -= quads.size();
+						}
+						catch (Exception exception) {
+							Log.error("[terrain] build failed", exception);
+						}
+					}
+				}
+
+				if (built == null) {
+					continue;
 				}
 			}
 
-			if (bufferPice.indexCount > 0 && frustum.isVisible(new AABB(minX + bufferPice.minX, minY + bufferPice.minY, minZ + bufferPice.minZ, minX + bufferPice.maxX, minY + bufferPice.maxY, minZ + bufferPice.maxZ))) {
-				for (TextureAtlasSprite sprite : TerrainTranslucency.sprites(entry.getKey())) {
-					SpriteUtil.INSTANCE.markSpriteActive(sprite);
+			boolean marked = false;
+
+			for (BufferPice piece : built.pieces()) {
+				if (piece.indexCount <= 0 || !frustum.isVisible(new AABB(minX + piece.minX, minY + piece.minY, minZ + piece.minZ, minX + piece.maxX, minY + piece.maxY, minZ + piece.maxZ))) {
+					continue;
+				}
+
+				if (!marked) {
+					marked = true;
+					for (TextureAtlasSprite sprite : TerrainTranslucency.sprites(entry.getKey())) {
+						SodiumSprites.markActive(sprite);
+					}
 				}
 
 				float localX = (float) (position.x - minX);
 				float localY = (float) (position.y - minY);
 				float localZ = (float) (position.z - minZ);
-				float moveX = localX - bufferPice.sortX;
-				float moveY = localY - bufferPice.sortY;
-				float moveZ = localZ - bufferPice.sortZ;
 
-				if (sortBudget > 0 && (bufferPice.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
-					sort(bufferPice, localX, localY, localZ);
-					sortBudget -= bufferPice.indexCount / 6;
+				if (piece.sortJob != null && piece.sortJob.isDone() && sortUploads > 0) {
+					sortUploads--;
+					uploadSort(piece);
 				}
 
-				placedList.add(new Placed(bufferPice, (float) (minX - position.x), (float) (minY - position.y), (float) (minZ - position.z)));
+				float moveX = localX - piece.sortX;
+				float moveY = localY - piece.sortY;
+				float moveZ = localZ - piece.sortZ;
+
+				if (piece.sortJob == null && (piece.indexBuffer == null || moveX * moveX + moveY * moveY + moveZ * moveZ > SORT_MOVE_SQUARED)) {
+					startSort(piece, localX, localY, localZ);
+				}
+
+				placedList.add(new Placed(piece, (float) (minX - position.x), (float) (minY - position.y), (float) (minZ - position.z)));
 			}
 		}
 
 		// 区段之间也要从远到近画。
 		placedList.sort((a, b) -> Float.compare(distanceSquared(b), distanceSquared(a)));
 
-		current = new Frame(placedList, RenderSystem.getModelViewMatrixCopy());
+		current = new Frame(placedList, RenderSystem.getModelViewMatrixCopy(), shaders);
 	}
 
 	public static void draw(RenderPass pass, Object storage) {
@@ -214,19 +308,19 @@ public final class RetainedTerrain {
 
 		current = null;
 
-		//使用半透明实体管线提交内容
-		RenderType type = RenderTypes.entityTranslucentCull(TextureAtlas.LOCATION_BLOCKS);
-		PreparedRenderType base = type.prepare();
+		// 透明度由 ColorModulator 提供，顶点 alpha 恒为 255。
+		PreparedRenderType base = renderType(frame.shaders()).prepare();
 		Matrix4f texture = new Matrix4f();
+		int globalAlpha = SelectiveRenderingManager.config().alpha();
 
 		for (Placed placed : frame.placed()) {
+			BufferPice piece = placed.bufferPice();
+			float alpha = (piece.global ? globalAlpha : piece.alpha) / 255.0F;
+
 			Matrix4f modelView = new Matrix4f(frame.view()).scale(DEPTH_PUSH).translate(placed.x(), placed.y(), placed.z());
-			GpuBufferSlice transform = TerrainTranslucency.DRAW_ALPHA
-				? RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, SelectiveRenderingManager.config().alpha() / 255.0F), new Vector3f(), texture)
-				: RenderSystem.getDynamicUniforms().writeTransform(modelView, texture);
+			GpuBufferSlice transform = RenderSystem.getDynamicUniforms().writeTransform(modelView, new Vector4f(1.0F, 1.0F, 1.0F, alpha), new Vector3f(), texture);
 			PreparedRenderType prepared = new PreparedRenderType(base.name(), base.pipeline(), base.oitPipelineSet(), transform, base.scissorState(), base.textures());
 
-			BufferPice piece = placed.bufferPice();
 			if (piece.indexBuffer != null) {
 				prepared.drawFromBuffer(new StagedVertexBuffer.ExecuteInfo(piece.buffer, piece.indexBuffer, piece.indexType, 0, 0, piece.indexCount, PrimitiveTopology.QUADS), pass);
 				continue;
@@ -245,113 +339,218 @@ public final class RetainedTerrain {
 		return x * x + y * y + z * z;
 	}
 
-	// 把区段的四边形按到相机的距离从远到近排好，生成新的索引缓冲，半透明才能正确叠加。
-	private static void sort(BufferPice piece, float cameraX, float cameraY, float cameraZ) {
+	// 在后台把一组四边形按到相机的距离从远到近排好，结果是新的索引数据，半透明才能正确叠加。
+	private static void startSort(BufferPice piece, float cameraX, float cameraY, float cameraZ) {
+		float[] centroids = piece.centroids;
 		int count = piece.indexCount / 6;
-		long[] keys = new long[count];
 
-		for (int i = 0; i < count; i++) {
-			float dx = piece.centroids[i * 3] - cameraX;
-			float dy = piece.centroids[i * 3 + 1] - cameraY;
-			float dz = piece.centroids[i * 3 + 2] - cameraZ;
-			float distance = dx * dx + dy * dy + dz * dz;
-			keys[i] = ((long) Float.floatToIntBits(distance) << 32) | i;
+		piece.jobX = cameraX;
+		piece.jobY = cameraY;
+		piece.jobZ = cameraZ;
+		piece.sortJob = POOL.submit(() -> {
+			long[] keys = new long[count];
+
+			for (int i = 0; i < count; i++) {
+				float dx = centroids[i * 3] - cameraX;
+				float dy = centroids[i * 3 + 1] - cameraY;
+				float dz = centroids[i * 3 + 2] - cameraZ;
+				float distance = dx * dx + dy * dy + dz * dz;
+				keys[i] = ((long) Float.floatToIntBits(distance) << 32) | i;
+			}
+
+			Arrays.sort(keys);
+
+			boolean wide = count * 4 > 65535;
+			ByteBuffer data = ByteBuffer.allocateDirect(count * 6 * (wide ? 4 : 2)).order(ByteOrder.nativeOrder());
+
+			for (int k = count - 1; k >= 0; k--) {
+				int base = (int) (keys[k] & 0xFFFFFFFFL) * 4;
+				int[] pattern = {base, base + 1, base + 2, base + 2, base + 3, base};
+
+				for (int index : pattern) {
+					if (wide) {
+						data.putInt(index);
+					}
+					else {
+						data.putShort((short) index);
+					}
+				}
+			}
+
+			data.flip();
+			return data;
+		});
+	}
+
+	// 渲染线程落实后台排好的索引：第一次创建缓冲，之后原地写入。
+	private static void uploadSort(BufferPice piece) {
+		Future<ByteBuffer> job = piece.sortJob;
+		piece.sortJob = null;
+
+		if (piece.retired) {
+			return;
 		}
 
-		Arrays.sort(keys);
+		ByteBuffer data;
+		try {
+			data = job.get();
+		}
+		catch (Exception exception) {
+			return;
+		}
 
-		IndexType type = count * 4 > 65535 ? IndexType.INT : IndexType.SHORT;
-		ByteBuffer data = ByteBuffer.allocateDirect(count * 6 * type.bytes).order(ByteOrder.nativeOrder());
+		if (piece.indexBuffer == null) {
+			piece.indexType = piece.indexCount / 6 * 4 > 65535 ? IndexType.INT : IndexType.SHORT;
+			piece.indexBuffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain indices", GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, data);
+		}
+		else {
+			RenderSystem.getDevice().createCommandEncoder().writeToBuffer(piece.indexBuffer.slice(), data);
+		}
 
-		for (int k = count - 1; k >= 0; k--) {
-			int base = (int) (keys[k] & 0xFFFFFFFFL) * 4;
-			int[] pattern = {base, base + 1, base + 2, base + 2, base + 3, base};
+		piece.sortX = piece.jobX;
+		piece.sortY = piece.jobY;
+		piece.sortZ = piece.jobZ;
+	}
 
-			for (int index : pattern) {
-				if (type == IndexType.INT) {
-					data.putInt(index);
-				}
-				else {
-					data.putShort((short) index);
+	private static void retire(Section section) {
+		for (BufferPice piece : section.pieces()) {
+			piece.retired = true;
+			if (piece.sortJob != null) {
+				piece.sortJob.cancel(true);
+			}
+
+			GRAVEYARD.add(piece.buffer);
+			if (piece.indexBuffer != null) {
+				GRAVEYARD.add(piece.indexBuffer);
+			}
+		}
+	}
+
+	// 区段里的四边形按透明度分组，每组一块缓冲。
+	private static Section build(List<TerrainTranslucency.Quad> quads, RenderType type) {
+		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
+
+		for (TerrainTranslucency.Quad quad : quads) {
+			long key = quad.global() ? -1L : quad.alpha();
+			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
+		}
+
+		List<BufferPice> pieces = new ArrayList<>();
+		for (List<TerrainTranslucency.Quad> group : groups.values()) {
+			pieces.add(buildPiece(group, type));
+		}
+
+		return new Section(quads, pieces);
+	}
+
+	// 后台线程：把四边形按透明度分组并写成顶点字节，不碰任何渲染线程状态。
+	private static List<PieceData> buildData(List<TerrainTranslucency.Quad> quads, VertexFormat format) {
+		Map<Long, List<TerrainTranslucency.Quad>> groups = new LinkedHashMap<>();
+
+		for (TerrainTranslucency.Quad quad : quads) {
+			long key = quad.global() ? -1L : quad.alpha();
+			groups.computeIfAbsent(key, ignored -> new ArrayList<>()).add(quad);
+		}
+
+		List<PieceData> result = new ArrayList<>();
+		for (List<TerrainTranslucency.Quad> group : groups.values()) {
+			try (ByteBufferBuilder bytes = new ByteBufferBuilder(Math.max(1, group.size()) * 4 * VERTEX_STRIDE)) {
+				BufferBuilder builder = new BufferBuilder(bytes, PrimitiveTopology.QUADS, format);
+				float[] bounds = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
+				float[] centroids = new float[group.size() * 3];
+				fill(builder, group, bounds, centroids);
+
+				try (MeshData mesh = builder.buildOrThrow()) {
+					ByteBuffer copy = ByteBuffer.allocateDirect(mesh.vertexBuffer().remaining()).order(ByteOrder.nativeOrder());
+					copy.put(mesh.vertexBuffer().duplicate());
+					copy.flip();
+
+					TerrainTranslucency.Quad first = group.get(0);
+					result.add(new PieceData(copy, mesh.drawState().indexCount(), first.alpha(), first.global(), bounds, centroids));
 				}
 			}
 		}
 
-		data.flip();
-
-		if (piece.indexBuffer != null) {
-			GRAVEYARD.add(piece.indexBuffer);
-		}
-
-		piece.indexBuffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain indices", GpuBuffer.USAGE_INDEX | GpuBuffer.USAGE_COPY_DST, data);
-		piece.indexType = type;
-		piece.sortX = cameraX;
-		piece.sortY = cameraY;
-		piece.sortZ = cameraZ;
+		return result;
 	}
 
-	private static void retire(BufferPice piece) {
-		GRAVEYARD.add(piece.buffer);
-		if (piece.indexBuffer != null) {
-			GRAVEYARD.add(piece.indexBuffer);
+	// 渲染线程：把后台建好的数据上传成显存缓冲。
+	private static Section upload(List<TerrainTranslucency.Quad> quads, List<PieceData> data) {
+		List<BufferPice> pieces = new ArrayList<>();
+
+		for (PieceData piece : data) {
+			GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, piece.vertices());
+			pieces.add(new BufferPice(buffer, piece.indexCount(), piece.alpha(), piece.global(), piece.bounds(), piece.centroids()));
+		}
+
+		return new Section(quads, pieces);
+	}
+
+	private static void fill(BufferBuilder builder, List<TerrainTranslucency.Quad> quads, float[] bounds, float[] centroids) {
+		int quadIndex = 0;
+
+		for (TerrainTranslucency.Quad quad : quads) {
+			for (int i = 0; i < 12; i++) {
+				centroids[quadIndex * 3 + i % 3] += quad.positions()[i] * 0.25F;
+				bounds[i % 3] = Math.min(bounds[i % 3], quad.positions()[i]);
+				bounds[3 + i % 3] = Math.max(bounds[3 + i % 3], quad.positions()[i]);
+			}
+
+			quadIndex++;
+
+			for (int i = 0; i < 4; i++) {
+				builder.addVertex(quad.positions()[i * 3], quad.positions()[i * 3 + 1], quad.positions()[i * 3 + 2])
+					.setColor(quad.colors()[i])
+					.setUv(quad.uvs()[i * 2], quad.uvs()[i * 2 + 1])
+					.setOverlay(OverlayTexture.NO_OVERLAY)
+					.setLight(quad.lights()[i])
+					.setNormal(quad.normalX(), quad.normalY(), quad.normalZ());
+			}
 		}
 	}
 
-	private static BufferPice build(List<TerrainTranslucency.Quad> quads) {
+	private static BufferPice buildPiece(List<TerrainTranslucency.Quad> quads, RenderType type) {
 		try (ByteBufferBuilder bytes = new ByteBufferBuilder(Math.max(1, quads.size()) * 4 * VERTEX_STRIDE)) {
-			BufferBuilder builder = new BufferBuilder(bytes, PrimitiveTopology.QUADS, DefaultVertexFormat.ENTITY);
+			BufferBuilder builder = new BufferBuilder(bytes, PrimitiveTopology.QUADS, type.format());
 			float[] bounds = {Float.MAX_VALUE, Float.MAX_VALUE, Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE, -Float.MAX_VALUE};
-
 			float[] centroids = new float[quads.size() * 3];
-			int quadIndex = 0;
-
-			for (TerrainTranslucency.Quad quad : quads) {
-				for (int i = 0; i < 12; i++) {
-					centroids[quadIndex * 3 + i % 3] += quad.positions()[i] * 0.25F;
-				}
-
-				quadIndex++;
-
-				for (int i = 0; i < 12; i++) {
-					bounds[i % 3] = Math.min(bounds[i % 3], quad.positions()[i]);
-					bounds[3 + i % 3] = Math.max(bounds[3 + i % 3], quad.positions()[i]);
-				}
-
-				for (int i = 0; i < 4; i++) {
-					builder.addVertex(quad.positions()[i * 3], quad.positions()[i * 3 + 1], quad.positions()[i * 3 + 2])
-						.setColor(quad.colors()[i])
-						.setUv(quad.uvs()[i * 2], quad.uvs()[i * 2 + 1])
-						.setOverlay(OverlayTexture.NO_OVERLAY)
-						.setLight(quad.lights()[i])
-						.setNormal(quad.normalX(), quad.normalY(), quad.normalZ());
-				}
-			}
+			fill(builder, quads, bounds, centroids);
 
 			try (MeshData mesh = builder.buildOrThrow()) {
 				GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "selective_rendering translucent terrain", GpuBuffer.USAGE_VERTEX | GpuBuffer.USAGE_COPY_DST, mesh.vertexBuffer());
-				return new BufferPice(buffer, mesh.drawState().indexCount(), quads, bounds, centroids);
+				TerrainTranslucency.Quad first = quads.get(0);
+				return new BufferPice(buffer, mesh.drawState().indexCount(), first.alpha(), first.global(), bounds, centroids);
 			}
 		}
 	}
 
 	public static void releaseAll() {
 		current = null;
+		PENDING.values().forEach(pending -> pending.future().cancel(true));
+		PENDING.clear();
 		GRAVEYARD.forEach(GpuBuffer::close);
 		GRAVEYARD.clear();
 
-		for (BufferPice bufferPice : BUFFERS.values()) {
-			bufferPice.buffer.close();
-			if (bufferPice.indexBuffer != null) {
-				bufferPice.indexBuffer.close();
+		for (Section section : SECTIONS.values()) {
+			for (BufferPice piece : section.pieces()) {
+				piece.retired = true;
+				piece.buffer.close();
+				if (piece.indexBuffer != null) {
+					piece.indexBuffer.close();
+				}
 			}
 		}
 
-		BUFFERS.clear();
+		SECTIONS.clear();
 	}
 }
 //?} else {
 /*public final class RetainedTerrain {
 	private RetainedTerrain() {
+	}
+
+	public static boolean alphaFollowsDraw() {
+		return false;
 	}
 }
 *///?}

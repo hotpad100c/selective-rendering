@@ -314,16 +314,28 @@ MaLiLib 用它计算整张表的最大标签宽度，返回选区字符串会把
 
 ---
 
-## 光影下的地形半透明
+## 半透明地形的常驻缓冲
 
-光影包把地形顶点 alpha 当作环境光遮蔽，地形没法靠顶点 alpha 半透明。开着光影（`ShaderPackState`，经 Iris API 反射判断）时，
-`BlockRendererMixin.bufferQuad` 对半透明方块的四边形不再写入 Sodium 的区块 mesh，而是交给 `TerrainTranslucency.add`，
-按区段保存（`ChunkBuilderMeshingTaskMixin` 在编译任务开始 / 结束时 begin / finish，重建后整段替换）。
-边界上的面向内收 0.005 格避免和相邻方块共面，光照按 BSL 的 `0.75 + 0.25 * alpha` 公式预先补偿。
+26.3 + Sodium 下，半透明的方块和流体不进 Sodium 的区块 mesh：`BlockRendererMixin.bufferQuad` / `DefaultFluidRendererMixin.writeQuad`
+把四边形交给 `TerrainTranslucency` 按区段保存（`ChunkBuilderMeshingTaskMixin` 在编译任务开始 / 结束时 begin / finish，
+重建后整段替换）。顶点 alpha 恒为 255，截流时记下透明度，边界上的面向内收 0.005 格避免和相邻方块共面。
 
-绘制：26.3 上 `RetainedTerrain` 为每个区段维护一块常驻的 GPU 顶点缓冲（`RenderType` 为方块图集的 `entityTranslucent`），
-区段内容变化才重建（每帧有四边形预算，防止改配置后集中重建），之后每帧每区段只发一次绘制：
-`PreparedFrameMixin` 在 `FeatureRenderDispatcher.PreparedFrame.executeTranslucent` 开头调用 `RetainedTerrain.draw`，
-用 `PreparedRenderType.drawFromBuffer` 在同一个 RenderPass 里画，每个区段单独写一份带平移的 DynamicTransforms。
-26.1.2 / 26.2 没有这套 API，仍走原来每帧通过 `submitCustomGeometry` 提交的路径（`TerrainTranslucency.emit`）。
-没有排序，流体不在内，只做了 Sodium 路径。
+`RetainedTerrain` 为每个区段、每个透明度分组维护一块常驻 GPU 顶点缓冲，内容变化才重建（每帧有四边形预算）。
+绘制在 `PreparedFrameMixin`（`FeatureRenderDispatcher.PreparedFrame.executeTranslucent` 开头），只画主画面的提交
+（靠 `SubmitNodeStorage` 区分，光影的阴影图不画），用 `PreparedRenderType.drawFromBuffer` 在同一个 RenderPass 里发绘制：
+- 透明度由每次绘制的 DynamicTransforms 里的 `ColorModulator` 提供；等于当时全局透明度的四边形标为 global，之后跟随配置，
+  拖全局透明度拉条（两端都是半透明）不重建区块也不重建缓冲。
+- 每个区段单独写一份带相机旋转和平移的 modelview，整体缩放 1.0005 倍把深度推远一点，避开共面闪烁。
+- 每组四边形有按到相机距离从远到近排好的索引缓冲，相机移动超过 0.5 格才重排（每帧有预算），区段之间也从远到近画。
+- 做视锥剔除（区段整体、再用实际包围盒）和渲染距离剔除；可见区段里用到的动画精灵每帧调用 `SpriteUtil.markSpriteActive`。
+- 开着光影时用 `entityTranslucentCull(方块图集)`，必须在实体提交阶段建缓冲，Iris 才会按扩展格式写数据；
+  没开光影时用原版区块的半透明管线 `translucentMovingBlock`，方块顶点格式，没有实体管线多余的顶点数据。
+  光影开关切换时缓冲全部重建。
+26.1.2 / 26.2 没有这套 API，不截流，保持原版区块渲染。流体和方块一样处理；没有 Sodium 时走原来的顶点 alpha 路径。
+
+后台构建与原版路径：不开光影时顶点数据在后台线程池里建好（`buildData`），渲染线程只上传；排序也在后台做，
+完成后渲染线程把索引原地写入常驻索引缓冲（`writeToBuffer`）。开着光影时 Iris 的扩展顶点格式只有在渲染线程提交阶段才能写对，
+仍然同步构建，排序同样走后台。没有 Sodium 时，`ModelBlockRendererMixin`（方块，包裹 `BlockQuadOutput.put`）和
+`FluidRendererMixin`（流体，拦截 `vertex`）通过 `VanillaCapture` 截流，`SectionCompilerMixin` 负责 begin / finish，
+其余完全复用上面这套缓冲和绘制。
+

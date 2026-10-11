@@ -11,11 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public final class TerrainTranslucency {
-	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ) {
+	// alpha 是截流时的透明度，global 表示它等于当时的全局透明度（之后跟随配置变化，不用重建）。
+	public record Quad(float[] positions, float[] uvs, int[] colors, int[] lights, float normalX, float normalY, float normalZ, int alpha, boolean global) {
 	}
-
-	// 顶点 alpha 恒为 255，透明度改由绘制时的 ColorModulator 提供
-	public static final boolean DRAW_ALPHA = Boolean.getBoolean("selectiverendering.drawAlpha");
 
 	private static final Map<Long, List<Quad>> SECTIONS = new ConcurrentHashMap<>();
 	// 区段里用到的SPRITES，Sodium只让被渲染区段里用到的动画贴图播放，自己维护时要自己标记
@@ -36,7 +34,7 @@ public final class TerrainTranslucency {
 
 	public static void begin(long section) {
 		//? if >=26.3 {
-		BUILDER.set(new Builder(section, ShaderPackState.active()));
+		BUILDER.set(new Builder(section, true));
 		//?} else {
 		/*BUILDER.set(new Builder(section, false));
 		*///?}
